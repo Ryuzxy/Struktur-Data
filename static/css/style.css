@@ -1,0 +1,184 @@
+/* BroderPro Café Management System - Main Styles */
+
+:root {
+    --primary-color: #6f42c1;
+    --secondary-color: #20c997;
+    --accent-color: #fd7e14;
+    --dark-color: #343a40;
+    --light-color: #f8f9fa;
+}
+
+/* General Styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f5f5;
+    padding-bottom: 60px;
+}
+
+/* Navigation */
+.navbar-brand {
+    font-weight: 700;
+    font-size: 1.5rem;
+}
+
+/* Cards */
+.card {
+    border: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+    margin-bottom: 1.5rem;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+.card-header {
+    font-weight: 600;
+    background-color: white;
+    border-bottom: 2px solid var(--primary-color);
+}
+
+/* Buttons */
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+    padding: 0.5rem 1.5rem;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: #5a32a3;
+    border-color: #5a32a3;
+}
+
+/* Timeline for Schedule */
+.timeline-slot {
+    border-left: 3px solid var(--secondary-color);
+    padding: 0.5rem 0 0.5rem 1rem;
+    margin: 0.5rem 0;
+    background-color: white;
+    border-radius: 0 8px 8px 0;
+}
+
+.timeline-slot.reserved {
+    border-left-color: var(--accent-color);
+    background-color: #fff3e0;
+}
+
+.timeline-slot.available {
+    border-left-color: #28a745;
+    background-color: #f0fff4;
+}
+
+/* Reservation Cards */
+.reservation-card {
+    border: 2px solid var(--primary-color);
+    border-radius: 10px;
+    margin: 0.5rem 0;
+    padding: 1rem;
+    background: white;
+}
+
+.reservation-card.confirmed {
+    border-left: 5px solid #28a745;
+}
+
+.reservation-card.cancelled {
+    border-left: 5px solid #dc3545;
+    opacity: 0.7;
+}
+
+.reservation-card.completed {
+    border-left: 5px solid #6c757d;
+}
+
+/* RBT Visualizer */
+.rbt-node {
+    fill: #ff6b6b;
+    stroke: #c92a2a;
+    stroke-width: 2;
+}
+
+.rbt-node.black {
+    fill: #495057;
+    stroke: #212529;
+}
+
+.rbt-node.red {
+    fill: #ff6b6b;
+    stroke: #c92a2a;
+}
+
+.rbt-link {
+    stroke: #adb5bd;
+    stroke-width: 2;
+    fill: none;
+}
+
+/* Table Status */
+.table-status {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.table-status.available {
+    background-color: #28a745;
+}
+
+.table-status.occupied {
+    background-color: #dc3545;
+}
+
+.table-status.reserved {
+    background-color: #fd7e14;
+}
+
+.table-status.cleaning {
+    background-color: #17a2b8;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+/* Loading Spinner */
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .card {
+        margin-bottom: 1rem;
+    }
+    
+    .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+}
+
+/* Footer */
+.footer {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    background-color: var(--dark-color);
+    color: white;
+    padding: 1rem 0;
+}

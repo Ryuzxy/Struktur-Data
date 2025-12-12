@@ -1,0 +1,481 @@
+{% extends "layout.html" %}
+
+{% block title %}Edit Reservation - BroderPro{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .form-section h5 {
+        border-bottom: 2px solid var(--primary-color);
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.5rem;
+        color: var(--primary-color);
+    }
+    
+    .current-info {
+        background-color: #f8f9fa;
+        border-left: 4px solid var(--primary-color);
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="bi bi-pencil-square"></i> Edit Reservation</h1>
+            <a href="{{ url_for('reservations.index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to List
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            <strong>Editing Mode:</strong> You are editing reservation <code id="reservation-id-display"></code>.
+            Changes will be updated in the Red-Black Tree with O(log n) complexity.
+        </div>
+    </div>
+</div>
+
+<form id="edit-reservation-form" novalidate>
+    <input type="hidden" id="reservation_id">
+    
+    <div class="row">
+        <!-- Left Column: Current Information -->
+        <div class="col-md-6">
+            <div class="form-section">
+                <h5><i class="bi bi-info-circle"></i> Current Information</h5>
+                
+                <div id="current-info-container">
+                    <!-- Current info will be loaded here -->
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h5><i class="bi bi-person-circle"></i> Customer Information</h5>
+                
+                <div class="mb-3">
+                    <label for="edit_customer_name" class="form-label">Customer Name *</label>
+                    <input type="text" class="form-control" id="edit_customer_name" required>
+                    <div class="invalid-feedback">
+                        Please enter customer name (minimum 2 characters).
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="edit_customer_phone" class="form-label">Phone Number *</label>
+                        <input type="tel" class="form-control" id="edit_customer_phone" required>
+                        <div class="invalid-feedback">
+                            Please enter a valid phone number.
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label for="edit_party_size" class="form-label">Party Size *</label>
+                        <select class="form-select" id="edit_party_size" required>
+                            <option value="">Select number of people</option>
+                            {% for i in range(1, 21) %}
+                            <option value="{{ i }}">{{ i }} person{{ 's' if i > 1 else '' }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">
+                            Please select party size.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="edit_special_requests" class="form-label">Special Requests</label>
+                    <textarea class="form-control" id="edit_special_requests" rows="3"></textarea>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column: Date, Time & Table -->
+        <div class="col-md-6">
+            <div class="form-section">
+                <h5><i class="bi bi-clock"></i> Date & Time</h5>
+                
+                <div class="alert alert-warning" id="time-conflict-alert" style="display: none;">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span id="time-conflict-message"></span>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="edit_reservation_date" class="form-label">Date *</label>
+                        <input type="date" class="form-control" id="edit_reservation_date" required>
+                        <div class="invalid-feedback">
+                            Please select a valid date.
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label for="edit_reservation_time" class="form-label">Time *</label>
+                        <input type="time" class="form-control" id="edit_reservation_time" required
+                               min="08:00" max="22:00">
+                        <div class="invalid-feedback">
+                            Please select a time between 08:00 and 22:00.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="edit_duration_hours" class="form-label">Duration *</label>
+                    <div class="btn-group w-100" role="group">
+                        {% for duration in [1, 1.5, 2, 2.5, 3] %}
+                        <input type="radio" class="btn-check" name="edit_duration" id="edit_duration{{ duration|replace('.', '') }}" 
+                               value="{{ duration }}">
+                        <label class="btn btn-outline-primary" for="edit_duration{{ duration|replace('.', '') }}">
+                            {{ duration }} hour{{ 's' if duration > 1 else '' }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <input type="hidden" id="edit_duration_hours" required>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h5><i class="bi bi-table"></i> Table Information</h5>
+                
+                <div class="mb-3">
+                    <label for="edit_table_number" class="form-label">Table Number</label>
+                    <select class="form-select" id="edit_table_number">
+                        <option value="">No table assigned</option>
+                        {% for i in range(1, 16) %}
+                        <option value="{{ i }}">Table {{ i }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Leave empty to let system assign automatically</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="edit_status" class="form-label">Status</label>
+                    <select class="form-select" id="edit_status" required>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h5><i class="bi bi-check-circle"></i> Actions</h5>
+                
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg" id="update-btn">
+                        <i class="bi bi-save"></i> Update Reservation
+                    </button>
+                    
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-danger" onclick="cancelReservation()">
+                            <i class="bi bi-x-circle"></i> Cancel Reservation
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="checkTimeConflicts()">
+                            <i class="bi bi-clock"></i> Check Availability
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Update</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to update this reservation?</p>
+                <div class="alert alert-info">
+                    <i class="bi bi-diagram-3"></i>
+                    The reservation will be re-inserted into the Red-Black Tree with updated timestamp key.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="confirmUpdate()">Yes, Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentReservationId = null;
+    let originalReservation = null;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get reservation ID from URL
+        const pathParts = window.location.pathname.split('/');
+        currentReservationId = pathParts[pathParts.length - 1];
+        
+        if (!currentReservationId) {
+            showToast('Invalid reservation ID', 'danger');
+            window.location.href = '/reservations';
+            return;
+        }
+        
+        document.getElementById('reservation-id-display').textContent = currentReservationId;
+        document.getElementById('reservation_id').value = currentReservationId;
+        
+        // Load reservation data
+        loadReservationData();
+        
+        // Setup event listeners
+        document.getElementById('edit-reservation-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            new bootstrap.Modal(document.getElementById('confirmationModal')).show();
+        });
+        
+        // Time change listeners
+        ['edit_reservation_date', 'edit_reservation_time', 'edit_duration_hours'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('change', function() {
+                    document.getElementById('time-conflict-alert').style.display = 'none';
+                });
+            }
+        });
+        
+        // Duration radio buttons
+        document.querySelectorAll('input[name="edit_duration"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                document.getElementById('edit_duration_hours').value = this.value;
+            });
+        });
+    });
+    
+    function loadReservationData() {
+        fetch(`/reservations/api/${currentReservationId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    originalReservation = data.reservation;
+                    populateForm(data.reservation);
+                } else {
+                    showToast(data.error, 'danger');
+                    window.location.href = '/reservations';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading reservation:', error);
+                showToast('Error loading reservation data', 'danger');
+                window.location.href = '/reservations';
+            });
+    }
+    
+    function populateForm(reservation) {
+        // Set form values
+        document.getElementById('edit_customer_name').value = reservation.customer_name;
+        document.getElementById('edit_customer_phone').value = reservation.customer_phone;
+        document.getElementById('edit_party_size').value = reservation.party_size;
+        document.getElementById('edit_special_requests').value = reservation.special_requests || '';
+        document.getElementById('edit_status').value = reservation.status;
+        
+        // Date and time
+        const dateObj = new Date(reservation.reservation_time);
+        document.getElementById('edit_reservation_date').value = dateObj.toISOString().split('T')[0];
+        document.getElementById('edit_reservation_time').value = 
+            dateObj.getHours().toString().padStart(2, '0') + ':' + 
+            dateObj.getMinutes().toString().padStart(2, '0');
+        
+        // Duration
+        document.getElementById('edit_duration_hours').value = reservation.duration_hours;
+        const durationRadio = document.getElementById(`edit_duration${reservation.duration_hours.toString().replace('.', '')}`);
+        if (durationRadio) {
+            durationRadio.checked = true;
+        }
+        
+        // Table number
+        document.getElementById('edit_table_number').value = reservation.table_number || '';
+        
+        // Display current info
+        const currentInfo = `
+            <div class="current-info">
+                <h6>Current Reservation Details:</h6>
+                <p><strong>Customer:</strong> ${reservation.customer_name}</p>
+                <p><strong>Date/Time:</strong> ${new Date(reservation.reservation_time).toLocaleString()}</p>
+                <p><strong>Duration:</strong> ${reservation.duration_hours} hours</p>
+                <p><strong>Table:</strong> ${reservation.table_number || 'Not assigned'}</p>
+                <p><strong>Status:</strong> 
+                    <span class="badge bg-${getStatusColor(reservation.status)}">
+                        ${reservation.status.toUpperCase()}
+                    </span>
+                </p>
+                <p><strong>Created:</strong> ${new Date(reservation.created_at).toLocaleString()}</p>
+                <p><strong>Last Updated:</strong> ${new Date(reservation.updated_at).toLocaleString()}</p>
+                <p class="text-muted mt-2">
+                    <small>
+                        <i class="bi bi-key"></i>
+                        RBT Key: ${reservation.rbt_key}
+                    </small>
+                </p>
+            </div>
+        `;
+        
+        document.getElementById('current-info-container').innerHTML = currentInfo;
+    }
+    
+    function checkTimeConflicts() {
+        const date = document.getElementById('edit_reservation_date').value;
+        const time = document.getElementById('edit_reservation_time').value;
+        const duration = document.getElementById('edit_duration_hours').value;
+        
+        if (!date || !time || !duration) {
+            showToast('Please fill in date, time, and duration first', 'warning');
+            return;
+        }
+        
+        // Build time string
+        const timeString = `${date}T${time}:00`;
+        const partySize = document.getElementById('edit_party_size').value;
+        
+        // Check availability
+        const params = new URLSearchParams({
+            party_size: partySize,
+            date: date,
+            time: time,
+            duration: duration
+        });
+        
+        fetch(`/reservations/api/available-tables?${params}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.available_tables.length > 0) {
+                        document.getElementById('time-conflict-message').textContent = 
+                            `✅ ${data.available_tables.length} tables available for the selected time.`;
+                        document.getElementById('time-conflict-alert').className = 'alert alert-success';
+                    } else {
+                        document.getElementById('time-conflict-message').textContent = 
+                            '⚠️ No tables available for the selected time. Consider changing time or duration.';
+                        document.getElementById('time-conflict-alert').className = 'alert alert-warning';
+                    }
+                    document.getElementById('time-conflict-alert').style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Error checking availability:', error);
+                showToast('Error checking availability', 'danger');
+            });
+    }
+    
+    function confirmUpdate() {
+        // Get form data
+        const updateData = {
+            customer_name: document.getElementById('edit_customer_name').value,
+            customer_phone: document.getElementById('edit_customer_phone').value,
+            party_size: parseInt(document.getElementById('edit_party_size').value),
+            reservation_time: `${document.getElementById('edit_reservation_date').value}T${document.getElementById('edit_reservation_time').value}:00`,
+            duration_hours: parseFloat(document.getElementById('edit_duration_hours').value),
+            special_requests: document.getElementById('edit_special_requests').value,
+            status: document.getElementById('edit_status').value
+        };
+        
+        // Add table number if selected
+        const tableNumber = document.getElementById('edit_table_number').value;
+        if (tableNumber) {
+            updateData.table_number = parseInt(tableNumber);
+        }
+        
+        // Disable update button
+        const updateBtn = document.getElementById('update-btn');
+        updateBtn.disabled = true;
+        updateBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Updating...';
+        
+        // Send update request
+        fetch(`/reservations/api/${currentReservationId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updateData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Reservation updated successfully!', 'success');
+                
+                // Close modal
+                bootstrap.Modal.getInstance(document.getElementById('confirmationModal')).hide();
+                
+                // Reload data
+                setTimeout(() => {
+                    loadReservationData();
+                    updateBtn.disabled = false;
+                    updateBtn.innerHTML = '<i class="bi bi-save"></i> Update Reservation';
+                }, 1000);
+            } else {
+                showToast(data.error, 'danger');
+                updateBtn.disabled = false;
+                updateBtn.innerHTML = '<i class="bi bi-save"></i> Update Reservation';
+            }
+        })
+        .catch(error => {
+            console.error('Error updating reservation:', error);
+            showToast('Error updating reservation', 'danger');
+            updateBtn.disabled = false;
+            updateBtn.innerHTML = '<i class="bi bi-save"></i> Update Reservation';
+        });
+    }
+    
+    function cancelReservation() {
+        if (confirm('Are you sure you want to cancel this reservation? This action cannot be undone.')) {
+            fetch(`/reservations/api/${currentReservationId}/cancel`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Reservation cancelled successfully', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/reservations';
+                    }, 1500);
+                } else {
+                    showToast(data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error cancelling reservation:', error);
+                showToast('Error cancelling reservation', 'danger');
+            });
+        }
+    }
+    
+    function getStatusColor(status) {
+        switch(status) {
+            case 'confirmed': return 'success';
+            case 'cancelled': return 'danger';
+            case 'completed': return 'secondary';
+            default: return 'light';
+        }
+    }
+</script>
+{% endblock %}

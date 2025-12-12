@@ -87,8 +87,7 @@
         <div class="container text-center">
             <span class="text-muted">
                 <i class="bi bi-cpu"></i> BroderPro Café Management System v1.0 | 
-                Algorithm: Red-Black Tree | 
-                <span id="rbt-stats" hx-get="/reservations/api/rbt-metrics" hx-trigger="load"></span>
+                &copy; 2024 BroderPro Inc.       
             </span>
         </div>
     </footer>
@@ -102,7 +101,6 @@
     {% block extra_js %}{% endblock %}
     
     <script>
-        // Update current time
         function updateTime() {
             const now = new Date();
             document.getElementById('current-time').textContent = 

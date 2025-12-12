@@ -1,0 +1,197 @@
+/* Timeline-specific styles */
+
+.timeline-container {
+    position: relative;
+    overflow-x: auto;
+    overflow-y: hidden;
+    user-select: none;
+}
+
+/* Time grid */
+.time-grid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+}
+
+.grid-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.grid-line.hour {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.grid-line.half-hour {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+/* Table columns */
+.table-column {
+    position: relative;
+    flex: 0 0 auto;
+    border-right: 1px solid #dee2e6;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 59px,
+        rgba(0, 0, 0, 0.05) 60px
+    );
+}
+
+.table-column:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Reservation blocks with different status */
+.reservation-block.confirmed {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    border-left: 4px solid #198754;
+}
+
+.reservation-block.cancelled {
+    background: linear-gradient(135deg, #6c757d, #adb5bd);
+    border-left: 4px solid #495057;
+    opacity: 0.7;
+}
+
+.reservation-block.completed {
+    background: linear-gradient(135deg, #0d6efd, #0dcaf0);
+    border-left: 4px solid #0d6efd;
+}
+
+.reservation-block.pending {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+    border-left: 4px solid #ffc107;
+}
+
+/* Hover effects */
+.reservation-block:hover::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.1);
+    pointer-events: none;
+}
+
+/* Time marker animation */
+.time-marker {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.7; }
+    50% { opacity: 1; }
+    100% { opacity: 0.7; }
+}
+
+/* Current time line animation */
+.current-time-line {
+    animation: blink 2s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Drag and drop styles */
+.drag-create-area {
+    background: rgba(111, 66, 193, 0.1);
+    border: 2px solid #6f42c1;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 100;
+}
+
+.drag-create-info {
+    background: #6f42c1;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    pointer-events: none;
+    z-index: 101;
+    white-space: nowrap;
+}
+
+/* Tooltip animations */
+.reservation-tooltip {
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Scrollbar styling */
+.timeline-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.timeline-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.timeline-container::-webkit-scrollbar-thumb {
+    background: #6f42c1;
+    border-radius: 4px;
+}
+
+.timeline-container::-webkit-scrollbar-thumb:hover {
+    background: #5a32a3;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .table-column {
+        min-width: 120px;
+    }
+    
+    .reservation-block {
+        font-size: 0.7rem;
+        padding: 4px;
+    }
+    
+    .reservation-customer {
+        font-size: 0.65rem;
+    }
+    
+    .reservation-time {
+        font-size: 0.6rem;
+    }
+}
+
+/* Print styles */
+@media print {
+    .timeline-container {
+        overflow: visible !important;
+        height: auto !important;
+    }
+    
+    .reservation-block {
+        break-inside: avoid;
+    }
+    
+    .btn, .modal, .tooltip {
+        display: none !important;
+    }
+}

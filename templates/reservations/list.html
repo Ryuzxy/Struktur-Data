@@ -1,0 +1,198 @@
+# ... (existing code)
+
+# Add these new routes:
+
+@reservation_bp.route('/edit/<reservation_id>')
+def edit_page(reservation_id):
+    """Edit reservation page"""
+    return render_template('reservations/edit.html')
+
+@reservation_bp.route('/api/search')
+def search_reservations():
+    """Search reservations with filters"""
+    try:
+        customer_name = request.args.get('customer', '')
+        status = request.args.get('status', '')
+        table_number = request.args.get('table', '')
+        date_str = request.args.get('date', '')
+        
+        # Get all reservations
+        all_reservations = service.repository.get_all()
+        
+        # Apply filters
+        filtered = all_reservations
+        
+        if customer_name:
+            filtered = [r for r in filtered if customer_name.lower() in r.customer_name.lower()]
+            
+        if status:
+            filtered = [r for r in filtered if r.status == status]
+            
+        if table_number:
+            filtered = [r for r in filtered if r.table_number == int(table_number)]
+            
+        if date_str:
+            try:
+                date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                filtered = service.get_reservations_by_date(date)
+            except ValueError:
+                pass
+        
+        return jsonify({
+            'success': True,
+            'reservations': [r.to_dict() for r in filtered],
+            'count': len(filtered)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@reservation_bp.route('/api/<reservation_id>', methods=['DELETE'])
+def delete_reservation(reservation_id):
+    """Permanently delete reservation"""
+    try:
+        # Get reservation first
+        reservation = service.repository.get(reservation_id)
+        if not reservation:
+            return jsonify({
+                'success': False,
+                'error': 'Reservation not found'
+            }), 404
+        
+        # Delete from repository
+        if service.repository.delete(reservation_id):
+            return jsonify({
+                'success': True,
+                'message': 'Reservation deleted permanently'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to delete reservation'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@reservation_bp.route('/api/bulk-update', methods=['POST'])
+def bulk_update():
+    """Bulk update reservations"""
+    try:
+        data = request.get_json()
+        reservation_ids = data.get('reservation_ids', [])
+        updates = data.get('updates', {})
+        
+        if not reservation_ids:
+            return jsonify({
+                'success': False,
+                'error': 'No reservation IDs provided'
+            }), 400
+        
+        success_count = 0
+        failures = []
+        
+        for reservation_id in reservation_ids:
+            success, message = service.update_reservation(reservation_id, **updates)
+            if success:
+                success_count += 1
+            else:
+                failures.append({
+                    'id': reservation_id,
+                    'error': message
+                })
+        
+        return jsonify({
+            'success': True,
+            'message': f'Updated {success_count} out of {len(reservation_ids)} reservations',
+            'success_count': success_count,
+            'failures': failures
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@reservation_bp.route('/api/analytics/daily')
+def daily_analytics():
+    """Get daily reservation analytics"""
+    try:
+        days = request.args.get('days', default=30, type=int)
+        
+        # Get reservations for the last N days
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=days)
+        
+        daily_counts = {}
+        current_date = start_date
+        
+        while current_date <= end_date:
+            reservations = service.get_reservations_by_date(current_date)
+            daily_counts[current_date.isoformat()] = {
+                'total': len(reservations),
+                'confirmed': len([r for r in reservations if r.status == 'confirmed']),
+                'cancelled': len([r for r in reservations if r.status == 'cancelled']),
+                'completed': len([r for r in reservations if r.status == 'completed'])
+            }
+            current_date += timedelta(days=1)
+        
+        # Get peak hours
+        hour_counts = {str(h).zfill(2): 0 for h in range(8, 22)}  # 8 AM to 10 PM
+        
+        all_reservations = service.repository.get_all()
+        for reservation in all_reservations:
+            if reservation.status == 'confirmed':
+                hour = reservation.reservation_time.hour
+                if 8 <= hour <= 21:
+                    hour_key = str(hour).zfill(2)
+                    hour_counts[hour_key] = hour_counts.get(hour_key, 0) + 1
+        
+        return jsonify({
+            'success': True,
+            'daily_counts': daily_counts,
+            'hourly_distribution': hour_counts,
+            'time_period': {
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+                'days': days
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@reservation_bp.route('/api/conflicts/<reservation_id>')
+def get_conflicts(reservation_id):
+    """Get conflicting reservations for a given reservation"""
+    try:
+        reservation = service.repository.get(reservation_id)
+        if not reservation:
+            return jsonify({
+                'success': False,
+                'error': 'Reservation not found'
+            }), 404
+        
+        conflicts = service.repository.get_conflicting_reservations(reservation)
+        
+        return jsonify({
+            'success': True,
+            'reservation_id': reservation_id,
+            'conflicts': [c.to_dict() for c in conflicts],
+            'conflict_count': len(conflicts)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

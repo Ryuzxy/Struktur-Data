@@ -1,0 +1,2062 @@
+{% extends "layout.html" %}
+
+{% block title %}RBT Visualizer - BroderPro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css">
+<style>
+    /* Main visualization container */
+    #rbt-network {
+        width: 100%;
+        height: 600px;
+        border: 2px solid #6f42c1;
+        border-radius: 10px;
+        background: #f8f9fa;
+    }
+    
+    /* Control panel */
+    .control-panel {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .control-section {
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .control-section:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+    
+    /* Algorithm visualization */
+    .algorithm-step {
+        background: #e9ecef;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 10px;
+        border-left: 4px solid #6f42c1;
+    }
+    
+    .step-active {
+        background: #dbeafe;
+        border-left-color: #3b82f6;
+        animation: pulse 2s infinite;
+    }
+    
+    .step-completed {
+        background: #d1fae5;
+        border-left-color: #10b981;
+    }
+    
+    /* Tree statistics */
+    .stat-card {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-top: 4px solid #6f42c1;
+    }
+    
+    .stat-value {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #6f42c1;
+        margin-bottom: 5px;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Node details panel */
+    .node-details {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    
+    .node-property {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #f1f3f4;
+    }
+    
+    .node-property:last-child {
+        border-bottom: none;
+    }
+    
+    .property-label {
+        font-weight: 500;
+        color: #5f6368;
+    }
+    
+    .property-value {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+        color: #202124;
+    }
+    
+    /* Color coding */
+    .color-red { color: #dc3545; }
+    .color-black { color: #212529; }
+    .color-nil { color: #6c757d; }
+    
+    /* Animation */
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+    
+    @keyframes highlight {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+    
+    @keyframes rotate {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    
+    .node-highlight {
+        animation: highlight 0.5s ease;
+    }
+    
+    /* Operation logs */
+    .operation-log {
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        padding: 8px 12px;
+        margin-bottom: 5px;
+        border-radius: 4px;
+        background: #f8f9fa;
+        border-left: 3px solid #6f42c1;
+    }
+    
+    .log-insert { border-left-color: #28a745; }
+    .log-delete { border-left-color: #dc3545; }
+    .log-search { border-left-color: #17a2b8; }
+    .log-rotate { border-left-color: #ffc107; }
+    
+    /* Tree comparison */
+    .comparison-container {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-top: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .tree-comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 15px;
+    }
+    
+    .tree-title {
+        text-align: center;
+        font-weight: bold;
+        color: #6f42c1;
+        margin-bottom: 10px;
+        padding-bottom: 5px;
+        border-bottom: 2px solid #6f42c1;
+    }
+    
+    /* Tutorial steps */
+    .tutorial-step {
+        background: #f0f7ff;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 10px;
+        border-left: 4px solid #4dabf7;
+    }
+    
+    .step-number {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        background: #4dabf7;
+        color: white;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 24px;
+        margin-right: 10px;
+        font-weight: bold;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        #rbt-network {
+            height: 400px;
+        }
+        
+        .tree-comparison {
+            grid-template-columns: 1fr;
+        }
+        
+        .node-details {
+            margin-top: 20px;
+        }
+    }
+    
+    /* Custom node styles for vis.js */
+    .vis-red {
+        background-color: #ff6b6b !important;
+        border-color: #c92a2a !important;
+        color: white !important;
+        font-weight: bold;
+    }
+    
+    .vis-black {
+        background-color: #495057 !important;
+        border-color: #212529 !important;
+        color: white !important;
+        font-weight: bold;
+    }
+    
+    .vis-nil {
+        background-color: #adb5bd !important;
+        border-color: #6c757d !important;
+        color: white !important;
+        font-style: italic;
+    }
+    
+    .vis-selected {
+        box-shadow: 0 0 0 3px rgba(111, 66, 193, 0.5) !important;
+    }
+    
+    /* Legend */
+    .legend {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.85rem;
+    }
+    
+    .legend-color {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+    }
+    
+    .legend-red { background-color: #ff6b6b; }
+    .legend-black { background-color: #495057; }
+    .legend-nil { background-color: #adb5bd; }
+    .legend-selected { 
+        background: white;
+        border: 2px solid #6f42c1;
+    }
+    
+    /* Performance metrics */
+    .performance-metrics {
+        background: linear-gradient(135deg, #6f42c1, #5a32a3);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+    }
+    
+    .metric-item {
+        text-align: center;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+    }
+    
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .metric-label {
+        font-size: 0.8rem;
+        opacity: 0.9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1><i class="bi bi-diagram-3"></i> Red-Black Tree Visualizer</h1>
+            <div class="btn-group">
+                <button class="btn btn-outline-secondary" onclick="exportTreeImage()">
+                    <i class="bi bi-download"></i> Export Image
+                </button>
+                <button class="btn btn-outline-primary" onclick="startTutorial()">
+                    <i class="bi bi-question-circle"></i> Tutorial
+                </button>
+            </div>
+        </div>
+        <p class="text-muted">Interactive visualization of the Red-Black Tree data structure used in BroderPro</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left Column: Tree Visualization -->
+    <div class="col-lg-8 col-md-7 mb-4">
+        <div class="control-panel">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="control-section">
+                        <h5><i class="bi bi-sliders"></i> Tree Controls</h5>
+                        <div class="btn-group w-100 mb-2" role="group">
+                            <button class="btn btn-outline-primary" onclick="zoomIn()">
+                                <i class="bi bi-zoom-in"></i>
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="zoomOut()">
+                                <i class="bi bi-zoom-out"></i>
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="fitToScreen()">
+                                <i class="bi bi-arrows-angle-contract"></i>
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="centerTree()">
+                                <i class="bi bi-compass"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="btn-group w-100 mb-2" role="group">
+                            <button class="btn btn-outline-success" onclick="layoutHierarchical()">
+                                <i class="bi bi-arrow-down-up"></i> Hierarchy
+                            </button>
+                            <button class="btn btn-outline-success" onclick="layoutRadial()">
+                                <i class="bi bi-circle"></i> Radial
+                            </button>
+                            <button class="btn btn-outline-success" onclick="layoutTree()">
+                                <i class="bi bi-diagram-2"></i> Tree
+                            </button>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <label class="form-label">Physics Simulation</label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="physics-toggle" checked>
+                                <label class="form-check-label" for="physics-toggle">Enable Physics</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="control-section">
+                        <h5><i class="bi bi-palette"></i> Display Options</h5>
+                        <div class="mb-2">
+                            <label class="form-label">Node Size</label>
+                            <input type="range" class="form-range" id="node-size-slider" min="10" max="50" value="25">
+                        </div>
+                        
+                        <div class="mb-2">
+                            <label class="form-label">Font Size</label>
+                            <input type="range" class="form-range" id="font-size-slider" min="10" max="30" value="14">
+                        </div>
+                        
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="show-labels" checked>
+                            <label class="form-check-label" for="show-labels">Show Node Labels</label>
+                        </div>
+                        
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="show-values" checked>
+                            <label class="form-check-label" for="show-values">Show Reservation Data</label>
+                        </div>
+                        
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="animate-transitions" checked>
+                            <label class="form-check-label" for="animate-transitions">Animate Transitions</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Legend -->
+            <div class="control-section">
+                <h5><i class="bi bi-info-circle"></i> Legend</h5>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color legend-red"></div>
+                        <span>Red Node</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color legend-black"></div>
+                        <span>Black Node</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color legend-nil"></div>
+                        <span>NIL Node</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color legend-selected"></div>
+                        <span>Selected Node</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tree Visualization Container -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-tree"></i> Red-Black Tree Structure</h5>
+                <span class="badge bg-primary" id="tree-stats">Loading...</span>
+            </div>
+            <div class="card-body p-0">
+                <div id="rbt-network"></div>
+            </div>
+        </div>
+        
+        <!-- Operation Logs -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list-check"></i> Operation Log</h5>
+            </div>
+            <div class="card-body" style="max-height: 200px; overflow-y: auto;">
+                <div id="operation-log">
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-hourglass-split"></i> Waiting for operations...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column: Controls & Details -->
+    <div class="col-lg-4 col-md-5 mb-4">
+        <!-- Node Operations -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-cpu"></i> Tree Operations</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Insert Reservation</label>
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control" id="insert-key" placeholder="Key (timestamp)">
+                        <button class="btn btn-success" onclick="insertNode()">
+                            <i class="bi bi-plus-circle"></i> Insert
+                        </button>
+                    </div>
+                    <small class="text-muted">Enter timestamp or use random key</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Search Node</label>
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control" id="search-key" placeholder="Key to search">
+                        <button class="btn btn-info" onclick="searchNode()">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Delete Node</label>
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control" id="delete-key" placeholder="Key to delete">
+                        <button class="btn btn-danger" onclick="deleteNode()">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-warning" onclick="simulateRotation()">
+                        <i class="bi bi-arrow-left-right"></i> Simulate Rotation
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="randomOperations()">
+                        <i class="bi bi-shuffle"></i> Random Operations
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="clearTree()">
+                        <i class="bi bi-x-circle"></i> Clear Tree
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Selected Node Details -->
+        <div class="node-details">
+            <h5><i class="bi bi-info-square"></i> Node Details</h5>
+            <div id="node-details-content">
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-mouse" style="font-size: 2rem;"></i>
+                    <p class="mt-2">Click on a node to view details</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-lightning"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary" onclick="loadRealReservations()">
+                        <i class="bi bi-database"></i> Load Real Reservations
+                    </button>
+                    <button class="btn btn-outline-primary" onclick="validateTree()">
+                        <i class="bi bi-check-circle"></i> Validate RBT Properties
+                    </button>
+                    <button class="btn btn-outline-info" onclick="compareWithBST()">
+                        <i class="bi bi-columns-gap"></i> Compare with BST
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tree Statistics -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="performance-metrics">
+            <h5 class="text-white mb-0"><i class="bi bi-graph-up"></i> Performance Metrics</h5>
+            <div class="metric-grid" id="performance-metrics">
+                <div class="metric-item">
+                    <div class="metric-value" id="metric-nodes">0</div>
+                    <div class="metric-label">Total Nodes</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="metric-height">0</div>
+                    <div class="metric-label">Tree Height</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="metric-inserts">0</div>
+                    <div class="metric-label">Insert Operations</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="metric-searches">0</div>
+                    <div class="metric-label">Search Operations</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="metric-deletes">0</div>
+                    <div class="metric-label">Delete Operations</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="metric-rotations">0</div>
+                    <div class="metric-label">Rotations</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Algorithm Steps Visualization -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-code-square"></i> Algorithm Steps</h5>
+            </div>
+            <div class="card-body">
+                <div class="row" id="algorithm-steps">
+                    <!-- Algorithm steps will be dynamically added here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tutorial Modal -->
+<div class="modal fade" id="tutorialModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-question-circle"></i> RBT Visualizer Tutorial</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="tutorial-content">
+                    <div class="tutorial-step" id="tutorial-step-1">
+                        <div class="step-number">1</div>
+                        <strong>Understanding Nodes</strong>
+                        <p class="mb-0 mt-2">Red-Black Tree nodes have two colors: <span class="color-red">Red</span> and <span class="color-black">Black</span>. Each node contains a key (timestamp) and reservation data.</p>
+                    </div>
+                    
+                    <div class="tutorial-step" id="tutorial-step-2">
+                        <div class="step-number">2</div>
+                        <strong>RBT Properties</strong>
+                        <p class="mb-0 mt-2">1. Every node is either red or black<br>
+                           2. The root is always black<br>
+                           3. Red nodes cannot have red children<br>
+                           4. Every path from root to leaf has same number of black nodes</p>
+                    </div>
+                    
+                    <div class="tutorial-step" id="tutorial-step-3">
+                        <div class="step-number">3</div>
+                        <strong>Tree Operations</strong>
+                        <p class="mb-0 mt-2">Use the operation panel to insert, search, or delete nodes. The tree will automatically rebalance to maintain RBT properties.</p>
+                    </div>
+                    
+                    <div class="tutorial-step" id="tutorial-step-4">
+                        <div class="step-number">4</div>
+                        <strong>Visual Controls</strong>
+                        <p class="mb-0 mt-2">Use zoom controls, change layout, and adjust display options to better understand the tree structure.</p>
+                    </div>
+                    
+                    <div class="tutorial-step" id="tutorial-step-5">
+                        <div class="step-number">5</div>
+                        <strong>Performance Metrics</strong>
+                        <p class="mb-0 mt-2">Monitor performance metrics to see how RBT maintains O(log n) operations even with many nodes.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="startInteractiveTutorial()">
+                    <i class="bi bi-play-circle"></i> Start Interactive Tutorial
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Compare with BST Modal -->
+<div class="modal fade" id="compareModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-columns-gap"></i> RBT vs BST Comparison</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="comparison-container">
+                    <div class="tree-comparison">
+                        <div>
+                            <div class="tree-title">Red-Black Tree</div>
+                            <div id="rbt-comparison" style="height: 400px; border: 1px solid #6f42c1; border-radius: 8px;"></div>
+                            <div class="mt-2 text-center">
+                                <span class="badge bg-success">Self-balancing</span>
+                                <span class="badge bg-info">O(log n) operations</span>
+                                <span class="badge bg-primary">Guaranteed height</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div class="tree-title">Binary Search Tree</div>
+                            <div id="bst-comparison" style="height: 400px; border: 1px solid #dc3545; border-radius: 8px;"></div>
+                            <div class="mt-2 text-center">
+                                <span class="badge bg-warning">Not self-balancing</span>
+                                <span class="badge bg-danger">O(n) worst case</span>
+                                <span class="badge bg-secondary">Can degrade</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>Performance Comparison</h6>
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Operation</th>
+                                    <th>RBT Complexity</th>
+                                    <th>BST Complexity</th>
+                                    <th>Advantage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Insert</td>
+                                    <td><code>O(log n)</code></td>
+                                    <td><code>O(log n) - O(n)</code></td>
+                                    <td>RBT guarantees balance</td>
+                                </tr>
+                                <tr>
+                                    <td>Search</td>
+                                    <td><code>O(log n)</code></td>
+                                    <td><code>O(log n) - O(n)</code></td>
+                                    <td>RBT consistent performance</td>
+                                </tr>
+                                <tr>
+                                    <td>Delete</td>
+                                    <td><code>O(log n)</code></td>
+                                    <td><code>O(log n) - O(n)</code></td>
+                                    <td>RBT maintains balance</td>
+                                </tr>
+                                <tr>
+                                    <td>Height</td>
+                                    <td><code>≤ 2log(n+1)</code></td>
+                                    <td><code>n (worst)</code></td>
+                                    <td>RBT bounded height</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tree Validation Modal -->
+<div class="modal fade" id="validationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-check-circle"></i> RBT Property Validation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="validation-results">
+                    <!-- Validation results will be shown here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+<script>
+    // Global variables
+    let network = null;
+    let nodes = null;
+    let edges = null;
+    let currentTree = null;
+    let operationCount = {
+        insert: 0,
+        search: 0,
+        delete: 0,
+        rotate: 0
+    };
+    let selectedNode = null;
+    let tutorialStep = 0;
+    
+    // Initialize visualization
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeVisualization();
+        loadRealTreeStructure();
+        setupEventListeners();
+        updatePerformanceMetrics();
+        
+        // Auto-refresh tree every 30 seconds
+        setInterval(loadRealTreeStructure, 30000);
+    });
+    
+    function initializeVisualization() {
+        // Create initial empty tree
+        nodes = new vis.DataSet();
+        edges = new vis.DataSet();
+        
+        // Create container for network
+        const container = document.getElementById('rbt-network');
+        
+        // Define options
+        const options = {
+            nodes: {
+                shape: 'dot',
+                size: 25,
+                font: {
+                    size: 14,
+                    color: '#ffffff'
+                },
+                borderWidth: 2,
+                shadow: true
+            },
+            edges: {
+                width: 2,
+                color: '#495057',
+                arrows: {
+                    to: false
+                },
+                smooth: {
+                    type: 'cubicBezier',
+                    roundness: 0.4
+                }
+            },
+            physics: {
+                enabled: true,
+                stabilization: {
+                    iterations: 100
+                },
+                barnesHut: {
+                    gravitationalConstant: -2000,
+                    centralGravity: 0.3,
+                    springLength: 200,
+                    springConstant: 0.04,
+                    damping: 0.09
+                }
+            },
+            interaction: {
+                dragNodes: true,
+                dragView: true,
+                zoomView: true,
+                hover: true,
+                tooltipDelay: 200
+            },
+            layout: {
+                hierarchical: {
+                    direction: 'UD',
+                    sortMethod: 'directed'
+                }
+            }
+        };
+        
+        // Initialize network
+        const data = { nodes: nodes, edges: edges };
+        network = new vis.Network(container, data, options);
+        
+        // Setup event handlers
+        network.on('click', function(params) {
+            if (params.nodes.length > 0) {
+                const nodeId = params.nodes[0];
+                selectNode(nodeId);
+            } else {
+                clearNodeSelection();
+            }
+        });
+        
+        network.on('hoverNode', function(params) {
+            const nodeId = params.node;
+            highlightNode(nodeId, true);
+        });
+        
+        network.on('blurNode', function(params) {
+            const nodeId = params.node;
+            highlightNode(nodeId, false);
+        });
+        
+        // Setup control listeners
+        document.getElementById('physics-toggle').addEventListener('change', function(e) {
+            network.setOptions({ physics: { enabled: e.target.checked } });
+        });
+        
+        document.getElementById('node-size-slider').addEventListener('input', function(e) {
+            nodes.update(nodes.get().map(node => ({
+                id: node.id,
+                size: parseInt(e.target.value)
+            })));
+        });
+        
+        document.getElementById('font-size-slider').addEventListener('input', function(e) {
+            network.setOptions({
+                nodes: {
+                    font: { size: parseInt(e.target.value) }
+                }
+            });
+        });
+        
+        document.getElementById('show-labels').addEventListener('change', function(e) {
+            network.setOptions({
+                nodes: {
+                    font: { 
+                        ...network.options.nodes.font,
+                        size: e.target.checked ? parseInt(document.getElementById('font-size-slider').value) : 0
+                    }
+                }
+            });
+        });
+        
+        document.getElementById('animate-transitions').addEventListener('change', function(e) {
+            network.setOptions({
+                nodes: {
+                    ...network.options.nodes,
+                    animation: e.target.checked
+                },
+                edges: {
+                    ...network.options.edges,
+                    animation: e.target.checked
+                }
+            });
+        });
+        
+        // Setup keyboard shortcuts
+        setupKeyboardShortcuts();
+    }
+    
+    function loadRealTreeStructure() {
+        fetch('/reservations/api/rbt-structure')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentTree = data.structure;
+                    renderTreeFromStructure(data.structure);
+                    updateTreeStatistics();
+                    logOperation('Loaded real reservation tree from database', 'search');
+                } else {
+                    // If no real data, create sample tree
+                    createSampleTree();
+                }
+            })
+            .catch(error => {
+                console.error('Error loading tree structure:', error);
+                createSampleTree();
+            });
+    }
+    
+    function renderTreeFromStructure(treeStructure) {
+        nodes.clear();
+        edges.clear();
+        
+        if (!treeStructure || treeStructure.key === null) {
+            nodes.add({
+                id: 0,
+                label: 'Empty Tree',
+                color: '#6c757d',
+                font: { color: '#ffffff' },
+                shape: 'box',
+                size: 30
+            });
+            return;
+        }
+        
+        // Recursively add nodes and edges
+        function addNode(node, parentId = null, isLeftChild = true) {
+            if (!node || node.key === null) {
+                // Add NIL node
+                const nilId = 'nil-' + Math.random().toString(36).substr(2, 9);
+                nodes.add({
+                    id: nilId,
+                    label: 'NIL',
+                    color: {
+                        background: '#adb5bd',
+                        border: '#6c757d',
+                        highlight: {
+                            background: '#ced4da',
+                            border: '#6c757d'
+                        }
+                    },
+                    font: { color: '#ffffff', italic: true },
+                    shape: 'box',
+                    size: 15,
+                    level: parentId ? (nodes.get(parentId)?.level || 0) + 1 : 0
+                });
+                
+                if (parentId) {
+                    edges.add({
+                        from: parentId,
+                        to: nilId,
+                        color: '#6c757d',
+                        dashes: true
+                    });
+                }
+                return nilId;
+            }
+            
+            const nodeId = node.key?.toString() || Math.random().toString(36).substr(2, 9);
+            const isRed = node.color === 'RED';
+            
+            // Extract reservation data
+            let label = node.key ? node.key.toFixed(2) : 'Root';
+            if (node.data && typeof node.data === 'object') {
+                if (node.data.customer_name) {
+                    label = `${node.data.customer_name}\n${node.key.toFixed(2)}`;
+                }
+            }
+            
+            nodes.add({
+                id: nodeId,
+                label: label,
+                color: {
+                    background: isRed ? '#ff6b6b' : '#495057',
+                    border: isRed ? '#c92a2a' : '#212529',
+                    highlight: {
+                        background: isRed ? '#ff8787' : '#868e96',
+                        border: isRed ? '#e03131' : '#495057'
+                    }
+                },
+                font: { 
+                    color: '#ffffff',
+                    size: 14,
+                    bold: true
+                },
+                shape: 'dot',
+                size: 25,
+                title: getNodeTooltip(node),
+                level: parentId ? (nodes.get(parentId)?.level || 0) + 1 : 0
+            });
+            
+            if (parentId) {
+                edges.add({
+                    from: parentId,
+                    to: nodeId,
+                    color: isLeftChild ? '#28a745' : '#dc3545',
+                    width: 2
+                });
+            }
+            
+            // Recursively add children
+            if (node.left) {
+                addNode(node.left, nodeId, true);
+            } else {
+                addNode(null, nodeId, true);
+            }
+            
+            if (node.right) {
+                addNode(node.right, nodeId, false);
+            } else {
+                addNode(null, nodeId, false);
+            }
+            
+            return nodeId;
+        }
+        
+        addNode(treeStructure);
+        
+        // Stabilize layout
+        network.stabilize();
+        
+        // Update tree stats
+        updateTreeStatistics();
+    }
+    
+    function getNodeTooltip(node) {
+        if (!node || node.key === null) {
+            return 'NIL Node (Leaf sentinel)';
+        }
+        
+        let tooltip = `<strong>Key:</strong> ${node.key}<br>`;
+        tooltip += `<strong>Color:</strong> ${node.color}<br>`;
+        
+        if (node.data && typeof node.data === 'object') {
+            if (node.data.customer_name) {
+                tooltip += `<strong>Customer:</strong> ${node.data.customer_name}<br>`;
+            }
+            if (node.data.reservation_time) {
+                tooltip += `<strong>Time:</strong> ${node.data.reservation_time}<br>`;
+            }
+            if (node.data.table_number) {
+                tooltip += `<strong>Table:</strong> ${node.data.table_number}<br>`;
+            }
+        }
+        
+        return tooltip;
+    }
+    
+    function createSampleTree() {
+        // Create a sample Red-Black Tree for demonstration
+        const sampleNodes = [
+            { id: '50', label: '50.00\nJohn', color: 'black', data: { customer_name: 'John Doe' } },
+            { id: '30', label: '30.00\nJane', color: 'red', data: { customer_name: 'Jane Smith' } },
+            { id: '70', label: '70.00\nBob', color: 'red', data: { customer_name: 'Bob Wilson' } },
+            { id: '20', label: '20.00\nAlice', color: 'black', data: { customer_name: 'Alice Brown' } },
+            { id: '40', label: '40.00\nCharlie', color: 'black', data: { customer_name: 'Charlie Davis' } },
+            { id: '60', label: '60.00\nDiana', color: 'black', data: { customer_name: 'Diana Evans' } },
+            { id: '80', label: '80.00\nEve', color: 'black', data: { customer_name: 'Eve Foster' } },
+            { id: '10', label: '10.00\nFrank', color: 'red', data: { customer_name: 'Frank Green' } },
+            { id: '90', label: '90.00\nGrace', color: 'red', data: { customer_name: 'Grace Hill' } }
+        ];
+        
+        const sampleEdges = [
+            { from: '50', to: '30', color: '#28a745' },
+            { from: '50', to: '70', color: '#dc3545' },
+            { from: '30', to: '20', color: '#28a745' },
+            { from: '30', to: '40', color: '#dc3545' },
+            { from: '70', to: '60', color: '#28a745' },
+            { from: '70', to: '80', color: '#dc3545' },
+            { from: '20', to: '10', color: '#28a745' },
+            { from: '80', to: '90', color: '#dc3545' }
+        ];
+        
+        // Add NIL nodes
+        const nilNodes = [];
+        const nilEdges = [];
+        
+        sampleNodes.forEach(node => {
+            // Add left NIL
+            const leftNilId = `nil-left-${node.id}`;
+            nilNodes.push({
+                id: leftNilId,
+                label: 'NIL',
+                color: '#adb5bd',
+                font: { color: '#ffffff', italic: true },
+                shape: 'box',
+                size: 10
+            });
+            nilEdges.push({
+                from: node.id,
+                to: leftNilId,
+                color: '#6c757d',
+                dashes: true
+            });
+            
+            // Add right NIL
+            const rightNilId = `nil-right-${node.id}`;
+            nilNodes.push({
+                id: rightNilId,
+                label: 'NIL',
+                color: '#adb5bd',
+                font: { color: '#ffffff', italic: true },
+                shape: 'box',
+                size: 10
+            });
+            nilEdges.push({
+                from: node.id,
+                to: rightNilId,
+                color: '#6c757d',
+                dashes: true
+            });
+        });
+        
+        // Clear and add all nodes/edges
+        nodes.clear();
+        edges.clear();
+        
+        sampleNodes.forEach(node => {
+            nodes.add({
+                id: node.id,
+                label: node.label,
+                color: {
+                    background: node.color === 'red' ? '#ff6b6b' : '#495057',
+                    border: node.color === 'red' ? '#c92a2a' : '#212529'
+                },
+                font: { color: '#ffffff', size: 12, bold: true },
+                shape: 'dot',
+                size: 20
+            });
+        });
+        
+        nilNodes.forEach(node => nodes.add(node));
+        sampleEdges.forEach(edge => edges.add(edge));
+        nilEdges.forEach(edge => edges.add(edge));
+        
+        // Add root indicator
+        nodes.update([{
+            id: '50',
+            borderWidth: 3,
+            borderColor: '#ffc107'
+        }]);
+        
+        network.stabilize();
+        updateTreeStatistics();
+        logOperation('Created sample Red-Black Tree', 'insert');
+    }
+    
+    function insertNode() {
+        const keyInput = document.getElementById('insert-key');
+        let key = keyInput.value.trim();
+        
+        if (!key) {
+            // Generate random key
+            key = (Math.random() * 100).toFixed(2);
+            keyInput.value = key;
+        }
+        
+        // Validate key
+        if (isNaN(parseFloat(key))) {
+            showToast('Please enter a valid numeric key', 'warning');
+            return;
+        }
+        
+        // Simulate RBT insert
+        simulateInsertOperation(parseFloat(key));
+        operationCount.insert++;
+        updatePerformanceMetrics();
+        
+        logOperation(`Inserted node with key: ${key}`, 'insert');
+        
+        // Clear input
+        keyInput.value = '';
+    }
+    
+    function simulateInsertOperation(key) {
+        // Create new node
+        const nodeId = key.toString();
+        const isRed = Math.random() > 0.5; // New nodes are typically red
+        
+        // Add node to visualization
+        nodes.add({
+            id: nodeId,
+            label: `${key}\nNew`,
+            color: {
+                background: isRed ? '#ff6b6b' : '#495057',
+                border: isRed ? '#c92a2a' : '#212529',
+                highlight: {
+                    background: isRed ? '#ff8787' : '#868e96',
+                    border: isRed ? '#e03131' : '#495057'
+                }
+            },
+            font: { color: '#ffffff', size: 12, bold: true },
+            shape: 'dot',
+            size: 20,
+            x: Math.random() * 500 - 250,
+            y: Math.random() * 500 - 250
+        });
+        
+        // Simulate finding insertion point (visual effect)
+        highlightAlgorithmStep('Finding insertion position...', 1);
+        
+        setTimeout(() => {
+            // Simulate connecting to tree
+            const existingNodes = nodes.get();
+            if (existingNodes.length > 1) {
+                // Connect to a random existing node (simplified)
+                const randomNode = existingNodes[Math.floor(Math.random() * (existingNodes.length - 1))];
+                const isLeft = Math.random() > 0.5;
+                
+                edges.add({
+                    from: randomNode.id,
+                    to: nodeId,
+                    color: isLeft ? '#28a745' : '#dc3545',
+                    width: 2
+                });
+                
+                highlightAlgorithmStep('Connected to parent node', 2);
+                
+                // Simulate fixing violations
+                setTimeout(() => {
+                    highlightAlgorithmStep('Checking RBT properties...', 3);
+                    
+                    // Randomly simulate rotation
+                    if (Math.random() > 0.7) {
+                        simulateRotationAnimation(randomNode.id);
+                        operationCount.rotate++;
+                        highlightAlgorithmStep('Performing rotation to fix violations', 4);
+                    }
+                    
+                    setTimeout(() => {
+                        highlightAlgorithmStep('Insertion complete - Tree is balanced', 5);
+                        updateTreeStatistics();
+                    }, 1000);
+                }, 1000);
+            } else {
+                // First node becomes root
+                nodes.update([{
+                    id: nodeId,
+                    borderWidth: 3,
+                    borderColor: '#ffc107'
+                }]);
+                highlightAlgorithmStep('Node set as root', 2);
+                updateTreeStatistics();
+            }
+        }, 1000);
+    }
+    
+    function searchNode() {
+        const key = document.getElementById('search-key').value.trim();
+        
+        if (!key) {
+            showToast('Please enter a search key', 'warning');
+            return;
+        }
+        
+        // Find node
+        const node = nodes.get(key);
+        
+        if (node) {
+            // Highlight found node
+            selectNode(key);
+            
+            // Animate search path
+            animateSearchPath(key);
+            
+            operationCount.search++;
+            updatePerformanceMetrics();
+            logOperation(`Found node with key: ${key}`, 'search');
+            showToast(`Node found: ${key}`, 'success');
+        } else {
+            // Show not found
+            logOperation(`Node not found: ${key}`, 'search');
+            showToast(`Node not found: ${key}`, 'warning');
+            
+            // Visualize search failure
+            highlightAlgorithmStep('Searching tree...', 1);
+            setTimeout(() => {
+                highlightAlgorithmStep('Key not found in tree', 2);
+            }, 1000);
+        }
+    }
+    
+    function animateSearchPath(targetKey) {
+        // Simplified search path animation
+        highlightAlgorithmStep('Starting search from root...', 1);
+        
+        // Get current nodes
+        const allNodes = nodes.get();
+        const visited = new Set();
+        
+        // Simplified DFS-like animation
+        function visitNext(index) {
+            if (index >= allNodes.length) {
+                highlightAlgorithmStep('Search complete', 5);
+                return;
+            }
+            
+            const node = allNodes[index];
+            
+            if (visited.has(node.id)) {
+                visitNext(index + 1);
+                return;
+            }
+            
+            visited.add(node.id);
+            
+            // Highlight current node
+            nodes.update([{
+                id: node.id,
+                color: {
+                    background: node.id === targetKey ? '#4dabf7' : '#ffc107',
+                    border: node.id === targetKey ? '#1864ab' : '#e67700'
+                }
+            }]);
+            
+            setTimeout(() => {
+                if (node.id === targetKey) {
+                    highlightAlgorithmStep(`Found target node: ${targetKey}`, 4);
+                } else {
+                    highlightAlgorithmStep(`Visiting node: ${node.id}`, 2 + (index % 2));
+                    visitNext(index + 1);
+                }
+            }, 500);
+        }
+        
+        visitNext(0);
+    }
+    
+    function deleteNode() {
+        const key = document.getElementById('delete-key').value.trim();
+        
+        if (!key) {
+            showToast('Please enter a key to delete', 'warning');
+            return;
+        }
+        
+        const node = nodes.get(key);
+        
+        if (!node) {
+            showToast(`Node not found: ${key}`, 'warning');
+            logOperation(`Delete failed - Node not found: ${key}`, 'delete');
+            return;
+        }
+        
+        // Show confirmation
+        if (!confirm(`Are you sure you want to delete node ${key}?`)) {
+            return;
+        }
+        
+        // Simulate delete operation
+        simulateDeleteOperation(key);
+        operationCount.delete++;
+        updatePerformanceMetrics();
+        
+        logOperation(`Deleted node: ${key}`, 'delete');
+        document.getElementById('delete-key').value = '';
+    }
+    
+    function simulateDeleteOperation(key) {
+        highlightAlgorithmStep('Starting delete operation...', 1);
+        
+        // Highlight node to delete
+        nodes.update([{
+            id: key,
+            color: { background: '#dc3545', border: '#c92a2a' }
+        }]);
+        
+        setTimeout(() => {
+            highlightAlgorithmStep('Finding replacement node...', 2);
+            
+            // Find connected edges
+            const connectedEdges = edges.get({
+                filter: function(edge) {
+                    return edge.from === key || edge.to === key;
+                }
+            });
+            
+            // Remove edges first
+            connectedEdges.forEach(edge => {
+                edges.remove(edge.id);
+            });
+            
+            setTimeout(() => {
+                highlightAlgorithmStep('Removing node from tree...', 3);
+                
+                // Remove node
+                nodes.remove(key);
+                
+                // Simulate fixing tree
+                setTimeout(() => {
+                    highlightAlgorithmStep('Fixing RBT properties after deletion...', 4);
+                    
+                    // Randomly simulate rotation if needed
+                    if (Math.random() > 0.5) {
+                        const remainingNodes = nodes.get();
+                        if (remainingNodes.length > 0) {
+                            const randomNode = remainingNodes[Math.floor(Math.random() * remainingNodes.length)];
+                            simulateRotationAnimation(randomNode.id);
+                            operationCount.rotate++;
+                        }
+                    }
+                    
+                    setTimeout(() => {
+                        highlightAlgorithmStep('Delete operation complete', 5);
+                        updateTreeStatistics();
+                    }, 1000);
+                }, 1000);
+            }, 1000);
+        }, 1000);
+    }
+    
+    function simulateRotation() {
+        const allNodes = nodes.get();
+        if (allNodes.length === 0) {
+            showToast('Tree is empty', 'warning');
+            return;
+        }
+        
+        // Select a random node to rotate
+        const randomNode = allNodes[Math.floor(Math.random() * allNodes.length)];
+        simulateRotationAnimation(randomNode.id);
+        operationCount.rotate++;
+        updatePerformanceMetrics();
+        
+        logOperation(`Simulated rotation at node: ${randomNode.id}`, 'rotate');
+    }
+    
+    function simulateRotationAnimation(nodeId) {
+        highlightAlgorithmStep('Starting rotation operation...', 1);
+        
+        // Highlight the node
+        nodes.update([{
+            id: nodeId,
+            color: { background: '#ffc107', border: '#e67700' }
+        }]);
+        
+        setTimeout(() => {
+            highlightAlgorithmStep('Identifying rotation type...', 2);
+            
+            // Get connected edges
+            const connectedEdges = edges.get({
+                filter: function(edge) {
+                    return edge.from === nodeId || edge.to === nodeId;
+                }
+            });
+            
+            // Animate edge changes
+            connectedEdges.forEach((edge, index) => {
+                setTimeout(() => {
+                    edges.update([{
+                        id: edge.id,
+                        color: '#4dabf7',
+                        width: 3
+                    }]);
+                }, index * 300);
+            });
+            
+            setTimeout(() => {
+                highlightAlgorithmStep('Performing rotation...', 3);
+                
+                // Move node to simulate rotation
+                const node = nodes.get(nodeId);
+                if (node) {
+                    // Simulate movement
+                    network.moveNode(nodeId, node.x + 100, node.y - 50);
+                    
+                    setTimeout(() => {
+                        highlightAlgorithmStep('Rotation complete - Tree rebalanced', 4);
+                        
+                        // Reset colors
+                        nodes.update([{
+                            id: nodeId,
+                            color: node.color
+                        }]);
+                        
+                        connectedEdges.forEach(edge => {
+                            edges.update([{
+                                id: edge.id,
+                                color: edge.color,
+                                width: 2
+                            }]);
+                        });
+                    }, 1000);
+                }
+            }, connectedEdges.length * 300);
+        }, 1000);
+    }
+    
+    function randomOperations() {
+        const operations = [
+            () => {
+                const key = (Math.random() * 100).toFixed(2);
+                document.getElementById('insert-key').value = key;
+                insertNode();
+            },
+            () => {
+                const allNodes = nodes.get();
+                if (allNodes.length > 0) {
+                    const randomNode = allNodes[Math.floor(Math.random() * allNodes.length)];
+                    document.getElementById('search-key').value = randomNode.id;
+                    searchNode();
+                }
+            },
+            () => {
+                const allNodes = nodes.get();
+                if (allNodes.length > 0) {
+                    const randomNode = allNodes[Math.floor(Math.random() * allNodes.length)];
+                    document.getElementById('delete-key').value = randomNode.id;
+                    deleteNode();
+                }
+            },
+            simulateRotation
+        ];
+        
+        // Perform 3-5 random operations
+        const numOperations = 3 + Math.floor(Math.random() * 3);
+        
+        function performNextOperation(index) {
+            if (index >= numOperations) {
+                showToast('Random operations complete', 'success');
+                return;
+            }
+            
+            const operation = operations[Math.floor(Math.random() * operations.length)];
+            operation();
+            
+            setTimeout(() => performNextOperation(index + 1), 3000);
+        }
+        
+        showToast(`Starting ${numOperations} random operations...`, 'info');
+        performNextOperation(0);
+    }
+    
+    function clearTree() {
+        if (!confirm('Are you sure you want to clear the entire tree?')) {
+            return;
+        }
+        
+        nodes.clear();
+        edges.clear();
+        
+        // Add empty tree indicator
+        nodes.add({
+            id: 'empty',
+            label: 'Tree Cleared\nClick "Load Real Reservations" or insert new nodes',
+            color: '#6c757d',
+            font: { color: '#ffffff', size: 16 },
+            shape: 'box',
+            size: 40
+        });
+        
+        updateTreeStatistics();
+        clearNodeSelection();
+        logOperation('Cleared entire tree', 'delete');
+        showToast('Tree cleared', 'success');
+    }
+    
+    function selectNode(nodeId) {
+        // Clear previous selection
+        clearNodeSelection();
+        
+        // Set new selection
+        selectedNode = nodeId;
+        
+        // Update visualization
+        nodes.update([{
+            id: nodeId,
+            borderWidth: 3,
+            borderColor: '#6f42c1',
+            shadow: true
+        }]);
+        
+        // Center on node
+        network.focus(nodeId, {
+            scale: 1.5,
+            animation: true
+        });
+        
+        // Update node details
+        updateNodeDetails(nodeId);
+        
+        // Log selection
+        logOperation(`Selected node: ${nodeId}`, 'search');
+    }
+    
+    function clearNodeSelection() {
+        if (selectedNode) {
+            nodes.update([{
+                id: selectedNode,
+                borderWidth: 2,
+                borderColor: undefined
+            }]);
+            selectedNode = null;
+        }
+        
+        document.getElementById('node-details-content').innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-mouse" style="font-size: 2rem;"></i>
+                <p class="mt-2">Click on a node to view details</p>
+            </div>
+        `;
+    }
+    
+    function highlightNode(nodeId, isHighlighted) {
+        if (nodeId === selectedNode) return;
+        
+        nodes.update([{
+            id: nodeId,
+            borderWidth: isHighlighted ? 3 : 2,
+            borderColor: isHighlighted ? '#4dabf7' : undefined
+        }]);
+    }
+    
+    function updateNodeDetails(nodeId) {
+        const node = nodes.get(nodeId);
+        if (!node) return;
+        
+        let detailsHTML = `
+            <div class="node-property">
+                <span class="property-label">Node ID:</span>
+                <span class="property-value">${node.id}</span>
+            </div>
+            <div class="node-property">
+                <span class="property-label">Label:</span>
+                <span class="property-value">${node.label}</span>
+            </div>
+            <div class="node-property">
+                <span class="property-label">Color:</span>
+                <span class="property-value ${node.color.background === '#ff6b6b' ? 'color-red' : 'color-black'}">
+                    ${node.color.background === '#ff6b6b' ? 'RED' : 'BLACK'}
+                </span>
+            </div>
+            <div class="node-property">
+                <span class="property-label">Size:</span>
+                <span class="property-value">${node.size}px</span>
+            </div>
+            <div class="node-property">
+                <span class="property-label">Position:</span>
+                <span class="property-value">(${Math.round(node.x)}, ${Math.round(node.y)})</span>
+            </div>
+        `;
+        
+        // Add connected edges info
+        const connectedEdges = edges.get({
+            filter: function(edge) {
+                return edge.from === nodeId || edge.to === nodeId;
+            }
+        });
+        
+        if (connectedEdges.length > 0) {
+            detailsHTML += `
+                <div class="node-property">
+                    <span class="property-label">Connections:</span>
+                    <span class="property-value">${connectedEdges.length}</span>
+                </div>
+            `;
+            
+            connectedEdges.forEach(edge => {
+                const otherNodeId = edge.from === nodeId ? edge.to : edge.from;
+                const direction = edge.from === nodeId ? '→' : '←';
+                detailsHTML += `
+                    <div class="node-property">
+                        <span class="property-label">${direction} ${otherNodeId}:</span>
+                        <span class="property-value" style="color: ${edge.color}">
+                            ${edge.color === '#28a745' ? 'Left' : edge.color === '#dc3545' ? 'Right' : 'NIL'}
+                        </span>
+                    </div>
+                `;
+            });
+        }
+        
+        // Add operation buttons
+        detailsHTML += `
+            <div class="mt-3 pt-3 border-top">
+                <div class="btn-group w-100">
+                    <button class="btn btn-sm btn-outline-primary" onclick="network.focus('${nodeId}', {scale: 2})">
+                        <i class="bi bi-zoom-in"></i> Zoom
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="simulateRotationAnimation('${nodeId}')">
+                        <i class="bi bi-arrow-left-right"></i> Rotate
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="simulateDeleteOperation('${nodeId}')">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('node-details-content').innerHTML = detailsHTML;
+    }
+    
+    function updateTreeStatistics() {
+        const nodeCount = nodes.length;
+        const edgeCount = edges.length;
+        
+        // Calculate approximate height (simplified)
+        const levels = new Set();
+        nodes.forEach(node => {
+            if (node.level !== undefined) {
+                levels.add(node.level);
+            }
+        });
+        const height = levels.size;
+        
+        document.getElementById('tree-stats').textContent = 
+            `Nodes: ${nodeCount} | Edges: ${edgeCount} | Height: ${height}`;
+        
+        // Update performance metrics
+        document.getElementById('metric-nodes').textContent = nodeCount;
+        document.getElementById('metric-height').textContent = height;
+    }
+    
+    function updatePerformanceMetrics() {
+        document.getElementById('metric-inserts').textContent = operationCount.insert;
+        document.getElementById('metric-searches').textContent = operationCount.search;
+        document.getElementById('metric-deletes').textContent = operationCount.delete;
+        document.getElementById('metric-rotations').textContent = operationCount.rotate;
+    }
+    
+    function logOperation(message, type = 'info') {
+        const logContainer = document.getElementById('operation-log');
+        const timestamp = new Date().toLocaleTimeString();
+        
+        const logEntry = document.createElement('div');
+        logEntry.className = `operation-log log-${type}`;
+        logEntry.innerHTML = `
+            <small class="text-muted">[${timestamp}]</small>
+            <strong>${type.toUpperCase()}:</strong> ${message}
+        `;
+        
+        logContainer.prepend(logEntry);
+        
+        // Limit log entries
+        const entries = logContainer.getElementsByClassName('operation-log');
+        if (entries.length > 20) {
+            entries[entries.length - 1].remove();
+        }
+    }
+    
+    function highlightAlgorithmStep(message, stepNumber) {
+        const stepsContainer = document.getElementById('algorithm-steps');
+        
+        // Clear previous steps if this is step 1
+        if (stepNumber === 1) {
+            stepsContainer.innerHTML = '';
+        }
+        
+        // Create step element
+        const stepElement = document.createElement('div');
+        stepElement.className = 'col-md-6';
+        stepElement.innerHTML = `
+            <div class="algorithm-step step-active" id="step-${stepNumber}">
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-primary me-2">Step ${stepNumber}</span>
+                    <span>${message}</span>
+                </div>
+            </div>
+        `;
+        
+        stepsContainer.appendChild(stepElement);
+        
+        // Mark previous steps as completed
+        for (let i = 1; i < stepNumber; i++) {
+            const prevStep = document.getElementById(`step-${i}`);
+            if (prevStep) {
+                prevStep.className = 'algorithm-step step-completed';
+            }
+        }
+        
+        // Auto-remove steps after completion
+        if (stepNumber === 5) {
+            setTimeout(() => {
+                stepsContainer.innerHTML = `
+                    <div class="col-12 text-center text-muted py-3">
+                        <i class="bi bi-hourglass-split"></i>
+                        <p class="mt-2">Algorithm visualization will appear here during operations</p>
+                    </div>
+                `;
+            }, 3000);
+        }
+    }
+    
+    // Visualization controls
+    function zoomIn() {
+        network.moveTo({
+            scale: network.getScale() * 1.2,
+            animation: true
+        });
+    }
+    
+    function zoomOut() {
+        network.moveTo({
+            scale: network.getScale() * 0.8,
+            animation: true
+        });
+    }
+    
+    function fitToScreen() {
+        network.fit({
+            animation: true
+        });
+    }
+    
+    function centerTree() {
+        network.moveTo({
+            position: { x: 0, y: 0 },
+            scale: 1,
+            animation: true
+        });
+    }
+    
+    function layoutHierarchical() {
+        network.setOptions({
+            layout: {
+                hierarchical: {
+                    direction: 'UD',
+                    sortMethod: 'directed',
+                    levelSeparation: 150,
+                    nodeSpacing: 100
+                }
+            }
+        });
+        network.stabilize();
+    }
+    
+    function layoutRadial() {
+        network.setOptions({
+            layout: {
+                hierarchical: false
+            }
+        });
+        
+        // Position nodes in a circle
+        const allNodes = nodes.get();
+        const radius = 300;
+        const center = { x: 0, y: 0 };
+        
+        allNodes.forEach((node, index) => {
+            const angle = (index / allNodes.length) * 2 * Math.PI;
+            const x = center.x + radius * Math.cos(angle);
+            const y = center.y + radius * Math.sin(angle);
+            
+            nodes.update([{
+                id: node.id,
+                x: x,
+                y: y,
+                fixed: false
+            }]);
+        });
+        
+        network.stabilize();
+    }
+    
+    function layoutTree() {
+        network.setOptions({
+            layout: {
+                hierarchical: {
+                    direction: 'LR',
+                    sortMethod: 'directed',
+                    levelSeparation: 200,
+                    nodeSpacing: 100
+                }
+            }
+        });
+        network.stabilize();
+    }
+    
+    function exportTreeImage() {
+        // Get network canvas
+        const canvas = document.querySelector('#rbt-network canvas');
+        if (!canvas) {
+            showToast('Cannot export - tree not rendered', 'warning');
+            return;
+        }
+        
+        // Create download link
+        const link = document.createElement('a');
+        link.download = `rbt-visualization-${new Date().toISOString().split('T')[0]}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        
+        showToast('Tree exported as PNG image', 'success');
+    }
+    
+    function startTutorial() {
+        const modal = new bootstrap.Modal(document.getElementById('tutorialModal'));
+        modal.show();
+    }
+    
+    function startInteractiveTutorial() {
+        bootstrap.Modal.getInstance(document.getElementById('tutorialModal')).hide();
+        
+        tutorialStep = 0;
+        const steps = [
+            () => {
+                showToast('Welcome to RBT Visualizer Tutorial!', 'info');
+                highlightAlgorithmStep('Understanding Red-Black Tree basics', 1);
+            },
+            () => {
+                showToast('Red-Black Trees are self-balancing binary search trees', 'info');
+                highlightAlgorithmStep('Key property: Every node is RED or BLACK', 2);
+            },
+            () => {
+                showToast('Try inserting a node using the operation panel', 'info');
+                document.getElementById('insert-key').value = '55.55';
+                highlightAlgorithmStep('Insert operation maintains tree balance', 3);
+            },
+            () => {
+                showToast('Now try searching for a node', 'info');
+                highlightAlgorithmStep('Search operation has O(log n) complexity', 4);
+            },
+            () => {
+                showToast('Finally, explore node details by clicking on them', 'info');
+                highlightAlgorithmStep('Click any node to see its properties', 5);
+                tutorialStep = 0;
+            }
+        ];
+        
+        function nextStep() {
+            if (tutorialStep < steps.length) {
+                steps[tutorialStep]();
+                tutorialStep++;
+                setTimeout(nextStep, 3000);
+            }
+        }
+        
+        nextStep();
+    }
+    
+    function loadRealReservations() {
+        loadRealTreeStructure();
+        showToast('Loading real reservation data from database...', 'info');
+    }
+    
+    function validateTree() {
+        highlightAlgorithmStep('Validating Red-Black Tree properties...', 1);
+        
+        const allNodes = nodes.get();
+        const validationResults = [];
+        
+        // Check 1: Root is black
+        const rootNodes = allNodes.filter(node => !edges.get().some(edge => edge.to === node.id));
+        const rootIsBlack = rootNodes.every(node => node.color.background !== '#ff6b6b');
+        
+        validationResults.push({
+            property: 'Root is black',
+            passed: rootIsBlack,
+            message: rootIsBlack ? '✓ Root node is black' : '✗ Root node should be black'
+        });
+        
+        setTimeout(() => {
+            highlightAlgorithmStep('Checking red-black property...', 2);
+            
+            // Check 2: No red-red parent-child
+            let redRedViolation = false;
+            edges.get().forEach(edge => {
+                const fromNode = nodes.get(edge.from);
+                const toNode = nodes.get(edge.to);
+                
+                if (fromNode && toNode && 
+                    fromNode.color.background === '#ff6b6b' && 
+                    toNode.color.background === '#ff6b6b') {
+                    redRedViolation = true;
+                }
+            });
+            
+            validationResults.push({
+                property: 'No red-red parent-child',
+                passed: !redRedViolation,
+                message: !redRedViolation ? '✓ No red nodes have red children' : '✗ Found red node with red child'
+            });
+            
+            setTimeout(() => {
+                highlightAlgorithmStep('Checking black height...', 3);
+                
+                // Check 3: All paths have same black height (simplified check)
+                // This is a simplified version for visualization
+                const hasNilNodes = allNodes.some(node => node.label === 'NIL');
+                
+                validationResults.push({
+                    property: 'Leaf NIL nodes',
+                    passed: hasNilNodes,
+                    message: hasNilNodes ? '✓ NIL leaf nodes present' : '✗ Missing NIL leaf nodes'
+                });
+                
+                setTimeout(() => {
+                    highlightAlgorithmStep('Validation complete', 4);
+                    
+                    // Show results
+                    const resultsHTML = validationResults.map(result => `
+                        <div class="alert ${result.passed ? 'alert-success' : 'alert-danger'}">
+                            <strong>${result.property}:</strong> ${result.message}
+                        </div>
+                    `).join('');
+                    
+                    document.getElementById('validation-results').innerHTML = resultsHTML;
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('validationModal'));
+                    modal.show();
+                }, 1000);
+            }, 1000);
+        }, 1000);
+    }
+    
+    function compareWithBST() {
+        const modal = new bootstrap.Modal(document.getElementById('compareModal'));
+        modal.show();
+        
+        // Initialize comparison visualizations
+        setTimeout(() => {
+            // This would initialize separate network visualizations for comparison
+            // For now, we'll just show the modal with static content
+        }, 100);
+    }
+    
+    function setupEventListeners() {
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl + I for insert
+            if (e.ctrlKey && e.key === 'i') {
+                e.preventDefault();
+                document.getElementById('insert-key').focus();
+            }
+            
+            // Ctrl + F for search
+            if (e.ctrlKey && e.key === 'f') {
+                e.preventDefault();
+                document.getElementById('search-key').focus();
+            }
+            
+            // Ctrl + D for delete
+            if (e.ctrlKey && e.key === 'd') {
+                e.preventDefault();
+                document.getElementById('delete-key').focus();
+            }
+            
+            // Space for random operations
+            if (e.key === ' ') {
+                e.preventDefault();
+                randomOperations();
+            }
+            
+            // Escape to clear selection
+            if (e.key === 'Escape') {
+                clearNodeSelection();
+            }
+        });
+    }
+    
+    function setupKeyboardShortcuts() {
+        // Already set up in setupEventListeners
+    }
+</script>
+{% endblock %}

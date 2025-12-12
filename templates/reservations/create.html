@@ -1,0 +1,682 @@
+{% extends "layout.html" %}
+
+{% block title %}New Reservation - BroderPro{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .form-section h5 {
+        border-bottom: 2px solid var(--primary-color);
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.5rem;
+        color: var(--primary-color);
+    }
+    
+    .available-table {
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .available-table:hover {
+        border-color: var(--primary-color);
+        background-color: rgba(111, 66, 193, 0.05);
+    }
+    
+    .available-table.selected {
+        border-color: var(--primary-color);
+        background-color: rgba(111, 66, 193, 0.1);
+    }
+    
+    .table-capacity {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    
+    .conflict-alert {
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+    
+    #loading-indicator {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="bi bi-plus-circle"></i> Create New Reservation</h1>
+            <a href="{{ url_for('reservations.index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to List
+            </a>
+        </div>
+    </div>
+</div>
+
+<form id="reservation-form" novalidate>
+    <div class="row">
+        <!-- Left Column: Customer Information -->
+        <div class="col-md-6">
+            <div class="form-section">
+                <h5><i class="bi bi-person-circle"></i> Customer Information</h5>
+                
+                <div class="mb-3">
+                    <label for="customer_name" class="form-label">Customer Name *</label>
+                    <input type="text" class="form-control" id="customer_name" required
+                           placeholder="Enter customer name">
+                    <div class="invalid-feedback">
+                        Please enter customer name (minimum 2 characters).
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="customer_phone" class="form-label">Phone Number *</label>
+                        <input type="tel" class="form-control" id="customer_phone" required
+                               placeholder="e.g., 0812-3456-7890">
+                        <div class="invalid-feedback">
+                            Please enter a valid phone number.
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label for="party_size" class="form-label">Party Size *</label>
+                        <select class="form-select" id="party_size" required>
+                            <option value="">Select number of people</option>
+                            {% for i in range(1, 21) %}
+                            <option value="{{ i }}">{{ i }} person{{ 's' if i > 1 else '' }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">
+                            Please select party size.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="special_requests" class="form-label">Special Requests</label>
+                    <textarea class="form-control" id="special_requests" rows="3"
+                              placeholder="Any special requests (allergies, birthday celebration, etc.)"></textarea>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h5><i class="bi bi-clock"></i> Date & Time</h5>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="reservation_date" class="form-label">Date *</label>
+                        <input type="date" class="form-control" id="reservation_date" required
+                               min="{{ now().strftime('%Y-%m-%d') }}">
+                        <div class="invalid-feedback">
+                            Please select a valid date.
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label for="reservation_time" class="form-label">Time *</label>
+                        <input type="time" class="form-control" id="reservation_time" required
+                               min="08:00" max="22:00">
+                        <div class="invalid-feedback">
+                            Please select a time between 08:00 and 22:00.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="duration_hours" class="form-label">Duration *</label>
+                    <div class="btn-group w-100" role="group">
+                        {% for duration in [1, 1.5, 2, 2.5, 3] %}
+                        <input type="radio" class="btn-check" name="duration" id="duration{{ duration|replace('.', '') }}" 
+                               value="{{ duration }}" {% if duration == 2 %}checked{% endif %}>
+                        <label class="btn btn-outline-primary" for="duration{{ duration|replace('.', '') }}">
+                            {{ duration }} hour{{ 's' if duration > 1 else '' }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <input type="hidden" id="duration_hours" value="2" required>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Business Hours:</strong> 08:00 - 22:00<br>
+                    <small>Reservations must be made at least 1 hour in advance.</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column: Table Selection -->
+        <div class="col-md-6">
+            <div class="form-section">
+                <h5><i class="bi bi-table"></i> Table Selection</h5>
+                
+                <div class="alert alert-warning" id="conflict-alert" style="display: none;">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span id="conflict-message"></span>
+                    <div id="alternative-times" class="mt-2"></div>
+                </div>
+                
+                <div class="alert alert-success" id="success-alert" style="display: none;">
+                    <i class="bi bi-check-circle"></i>
+                    <span id="success-message"></span>
+                </div>
+                
+                <div class="mb-3">
+                    <button type="button" class="btn btn-outline-primary w-100" onclick="findAvailableTables()"
+                            id="find-tables-btn">
+                        <i class="bi bi-search"></i> Find Available Tables
+                    </button>
+                </div>
+                
+                <div id="loading-indicator" class="text-center my-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Searching available tables...</span>
+                    </div>
+                    <p class="mt-2">Searching available tables using RBT algorithm...</p>
+                </div>
+                
+                <div id="tables-container" style="display: none;">
+                    <h6 class="mb-3">Available Tables</h6>
+                    <div id="available-tables-list" class="row">
+                        <!-- Tables will be loaded here -->
+                    </div>
+                    
+                    <div class="alert alert-light mt-3">
+                        <i class="bi bi-lightbulb"></i>
+                        <strong>Tip:</strong> The system uses Red-Black Tree algorithm to quickly find 
+                        available tables by checking time conflicts in O(log n) time.
+                    </div>
+                </div>
+                
+                <div id="no-tables-message" class="alert alert-danger" style="display: none;">
+                    <i class="bi bi-calendar-x"></i>
+                    <strong>No tables available</strong> for the selected time and party size.
+                    <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="suggestAlternatives()">
+                        <i class="bi bi-clock-history"></i> Suggest Alternative Times
+                    </button>
+                </div>
+                
+                <div id="selected-table-info" class="alert alert-primary mt-3" style="display: none;">
+                    <h6><i class="bi bi-check-circle"></i> Table Selected</h6>
+                    <p id="selected-table-details" class="mb-0"></p>
+                    <input type="hidden" id="selected_table_number">
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h5><i class="bi bi-check-circle"></i> Summary</h5>
+                
+                <div class="card">
+                    <div class="card-body">
+                        <div id="reservation-summary">
+                            <p class="text-muted mb-0">Fill in the form to see reservation summary</p>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" disabled>
+                                <i class="bi bi-calendar-plus"></i> Create Reservation
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="resetForm()">
+                                <i class="bi bi-arrow-clockwise"></i> Reset Form
+                            </button>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <div class="alert alert-light">
+                                <small class="text-muted">
+                                    <i class="bi bi-shield-check"></i>
+                                    <strong>Data Structure:</strong> This reservation will be stored in a 
+                                    Red-Black Tree with O(log n) time complexity for all operations.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Alternative Times Modal -->
+<div class="modal fade" id="alternativesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Alternative Time Slots</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Here are some alternative times with available tables:</p>
+                <div id="alternatives-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set default date to tomorrow
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        document.getElementById('reservation_date').valueAsDate = tomorrow;
+        
+        // Set default time to 12:00
+        document.getElementById('reservation_time').value = '12:00';
+        
+        // Update summary on form changes
+        ['customer_name', 'customer_phone', 'party_size', 'reservation_date', 'reservation_time'].forEach(id => {
+            document.getElementById(id).addEventListener('change', updateSummary);
+        });
+        
+        // Duration radio buttons
+        document.querySelectorAll('input[name="duration"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                document.getElementById('duration_hours').value = this.value;
+                updateSummary();
+                if (document.getElementById('selected_table_number').value) {
+                    findAvailableTables(); // Re-check availability with new duration
+                }
+            });
+        });
+        
+        // Form submission
+        document.getElementById('reservation-form').addEventListener('submit', createReservation);
+        
+        // Initialize summary
+        updateSummary();
+    });
+    
+    function updateSummary() {
+        const name = document.getElementById('customer_name').value;
+        const phone = document.getElementById('customer_phone').value;
+        const partySize = document.getElementById('party_size').value;
+        const date = document.getElementById('reservation_date').value;
+        const time = document.getElementById('reservation_time').value;
+        const duration = document.getElementById('duration_hours').value;
+        
+        let summaryHTML = '';
+        
+        if (name && phone && partySize && date && time) {
+            const dateObj = new Date(date + 'T' + time);
+            const endTime = new Date(dateObj.getTime() + (duration * 60 * 60 * 1000));
+            
+            summaryHTML = `
+                <div class="row">
+                    <div class="col-6">
+                        <p><strong>Customer:</strong></p>
+                        <p><strong>Party Size:</strong></p>
+                        <p><strong>Date:</strong></p>
+                        <p><strong>Time:</strong></p>
+                        <p><strong>Duration:</strong></p>
+                    </div>
+                    <div class="col-6">
+                        <p>${name}</p>
+                        <p>${partySize} person${partySize > 1 ? 's' : ''}</p>
+                        <p>${new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                        <p>${dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - 
+                           ${endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</p>
+                        <p>${duration} hour${duration > 1 ? 's' : ''}</p>
+                    </div>
+                </div>
+            `;
+            
+            // Enable submit button if table is selected
+            const tableSelected = document.getElementById('selected_table_number').value;
+            document.getElementById('submit-btn').disabled = !tableSelected;
+        } else {
+            summaryHTML = '<p class="text-muted mb-0">Fill in the form to see reservation summary</p>';
+            document.getElementById('submit-btn').disabled = true;
+        }
+        
+        document.getElementById('reservation-summary').innerHTML = summaryHTML;
+    }
+    
+    function findAvailableTables() {
+        const partySize = document.getElementById('party_size').value;
+        const date = document.getElementById('reservation_date').value;
+        const time = document.getElementById('reservation_time').value;
+        const duration = document.getElementById('duration_hours').value;
+        
+        if (!partySize || !date || !time) {
+            showToast('Please fill in party size, date, and time first', 'warning');
+            return;
+        }
+        
+        // Show loading
+        document.getElementById('loading-indicator').style.display = 'block';
+        document.getElementById('find-tables-btn').disabled = true;
+        document.getElementById('tables-container').style.display = 'none';
+        document.getElementById('no-tables-message').style.display = 'none';
+        document.getElementById('conflict-alert').style.display = 'none';
+        
+        // Build URL with parameters
+        const params = new URLSearchParams({
+            party_size: partySize,
+            date: date,
+            time: time,
+            duration: duration
+        });
+        
+        fetch(`/reservations/api/available-tables?${params}`)
+            .then(response => response.json())
+            .then(data => {
+                // Hide loading
+                document.getElementById('loading-indicator').style.display = 'none';
+                document.getElementById('find-tables-btn').disabled = false;
+                
+                if (data.success) {
+                    if (data.available_tables.length > 0) {
+                        renderAvailableTables(data.available_tables);
+                        document.getElementById('tables-container').style.display = 'block';
+                        document.getElementById('no-tables-message').style.display = 'none';
+                        
+                        // Show success message
+                        showSuccessMessage(`${data.available_tables.length} tables available for your selection`);
+                    } else {
+                        document.getElementById('tables-container').style.display = 'none';
+                        document.getElementById('no-tables-message').style.display = 'block';
+                        showConflictAlert('No tables available for the selected time');
+                    }
+                } else {
+                    showToast(data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error finding tables:', error);
+                document.getElementById('loading-indicator').style.display = 'none';
+                document.getElementById('find-tables-btn').disabled = false;
+                showToast('Error finding available tables', 'danger');
+            });
+    }
+    
+    function renderAvailableTables(tables) {
+        const container = document.getElementById('available-tables-list');
+        container.innerHTML = '';
+        
+        tables.forEach(table => {
+            const col = document.createElement('div');
+            col.className = 'col-md-6';
+            
+            col.innerHTML = `
+                <div class="available-table" onclick="selectTable(${table.table_number}, ${table.capacity}, '${table.location}')"
+                     id="table-${table.table_number}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">Table ${table.table_number}</h6>
+                            <p class="table-capacity mb-1">
+                                <i class="bi bi-people"></i> Capacity: ${table.capacity} people
+                            </p>
+                            <p class="table-capacity mb-0">
+                                <i class="bi bi-geo-alt"></i> ${table.location}
+                            </p>
+                        </div>
+                        <div>
+                            <span class="badge bg-success">Available</span>
+                        </div>
+                    </div>
+                    ${table.description ? `<small class="text-muted">${table.description}</small>` : ''}
+                </div>
+            `;
+            
+            container.appendChild(col);
+        });
+    }
+    
+    function selectTable(tableNumber, capacity, location) {
+        // Remove selection from all tables
+        document.querySelectorAll('.available-table').forEach(table => {
+            table.classList.remove('selected');
+        });
+        
+        // Add selection to clicked table
+        const tableElement = document.getElementById(`table-${tableNumber}`);
+        tableElement.classList.add('selected');
+        
+        // Update selected table info
+        document.getElementById('selected_table_number').value = tableNumber;
+        document.getElementById('selected-table-details').innerHTML = `
+            <strong>Table ${tableNumber}</strong> (Capacity: ${capacity} people)<br>
+            <small class="text-muted">Location: ${location}</small>
+        `;
+        document.getElementById('selected-table-info').style.display = 'block';
+        
+        // Enable submit button
+        document.getElementById('submit-btn').disabled = false;
+        
+        // Update summary
+        updateSummary();
+        
+        showToast(`Table ${tableNumber} selected`, 'success');
+    }
+    
+    function showConflictAlert(message) {
+        document.getElementById('conflict-message').textContent = message;
+        document.getElementById('conflict-alert').style.display = 'block';
+        document.getElementById('conflict-alert').classList.add('conflict-alert');
+    }
+    
+    function showSuccessMessage(message) {
+        document.getElementById('success-message').textContent = message;
+        document.getElementById('success-alert').style.display = 'block';
+        
+        // Hide after 5 seconds
+        setTimeout(() => {
+            document.getElementById('success-alert').style.display = 'none';
+        }, 5000);
+    }
+    
+    function suggestAlternatives() {
+        const partySize = document.getElementById('party_size').value;
+        const date = document.getElementById('reservation_date').value;
+        const time = document.getElementById('reservation_time').value;
+        const duration = document.getElementById('duration_hours').value;
+        
+        if (!partySize || !date || !time) return;
+        
+        const params = new URLSearchParams({
+            party_size: partySize,
+            date: date,
+            time: time,
+            duration: duration
+        });
+        
+        fetch(`/reservations/api/suggest-alternatives?${params}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.alternatives.length > 0) {
+                    renderAlternatives(data.alternatives);
+                    new bootstrap.Modal(document.getElementById('alternativesModal')).show();
+                } else {
+                    showToast('No alternative times available', 'warning');
+                }
+            })
+            .catch(error => {
+                console.error('Error suggesting alternatives:', error);
+                showToast('Error finding alternative times', 'danger');
+            });
+    }
+    
+    function renderAlternatives(alternatives) {
+        const container = document.getElementById('alternatives-list');
+        container.innerHTML = '';
+        
+        alternatives.forEach(alt => {
+            const altElement = document.createElement('div');
+            altElement.className = 'card mb-2';
+            altElement.innerHTML = `
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">${alt.time}</h6>
+                            <small class="text-muted">
+                                ${alt.available_tables} table${alt.available_tables > 1 ? 's' : ''} available
+                            </small>
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="useAlternativeTime('${alt.time}')">
+                            Select
+                        </button>
+                    </div>
+                    ${alt.table_numbers.length > 0 ? `
+                        <small class="text-muted">
+                            Available tables: ${alt.table_numbers.join(', ')}
+                        </small>
+                    ` : ''}
+                </div>
+            `;
+            container.appendChild(altElement);
+        });
+    }
+    
+    function useAlternativeTime(timeString) {
+        const [date, time] = timeString.split(' ');
+        document.getElementById('reservation_date').value = date;
+        document.getElementById('reservation_time').value = time;
+        
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('alternativesModal')).hide();
+        
+        // Find tables for new time
+        setTimeout(() => {
+            findAvailableTables();
+        }, 300);
+        
+        showToast(`Time updated to ${timeString}`, 'success');
+    }
+    
+    function createReservation(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        const form = document.getElementById('reservation-form');
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            return;
+        }
+        
+        // Get form data
+        const reservationData = {
+            customer_name: document.getElementById('customer_name').value,
+            customer_phone: document.getElementById('customer_phone').value,
+            party_size: parseInt(document.getElementById('party_size').value),
+            reservation_time: `${document.getElementById('reservation_date').value}T${document.getElementById('reservation_time').value}:00`,
+            duration_hours: parseFloat(document.getElementById('duration_hours').value),
+            special_requests: document.getElementById('special_requests').value,
+            table_number: parseInt(document.getElementById('selected_table_number').value)
+        };
+        
+        // Disable submit button
+        const submitBtn = document.getElementById('submit-btn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Creating...';
+        
+        // Send request
+        fetch('/reservations/api/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(reservationData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Reservation created successfully!', 'success');
+                
+                // Show confirmation
+                const reservation = data.reservation;
+                const date = new Date(reservation.reservation_time);
+                
+                document.getElementById('reservation-form').reset();
+                document.getElementById('selected-table-info').style.display = 'none';
+                document.getElementById('tables-container').style.display = 'none';
+                document.getElementById('selected_table_number').value = '';
+                
+                // Reset form to defaults
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                document.getElementById('reservation_date').valueAsDate = tomorrow;
+                document.getElementById('reservation_time').value = '12:00';
+                document.getElementById('duration_hours').value = '2';
+                
+                // Show success message with details
+                setTimeout(() => {
+                    alert(`
+                        ✅ RESERVATION CONFIRMED!
+                        
+                        Reservation ID: ${reservation.id}
+                        Customer: ${reservation.customer_name}
+                        Date: ${date.toLocaleDateString()}
+                        Time: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        Table: ${reservation.table_number}
+                        Party Size: ${reservation.party_size}
+                        
+                        Your reservation has been stored in the Red-Black Tree.
+                        You can view it in the reservations list.
+                    `);
+                    
+                    // Redirect to reservations list
+                    window.location.href = '/reservations/list';
+                }, 500);
+            } else {
+                showToast(data.error, 'danger');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-calendar-plus"></i> Create Reservation';
+            }
+        })
+        .catch(error => {
+            console.error('Error creating reservation:', error);
+            showToast('Error creating reservation', 'danger');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-calendar-plus"></i> Create Reservation';
+        });
+    }
+    
+    function resetForm() {
+        if (confirm('Are you sure you want to reset the form? All entered data will be lost.')) {
+            document.getElementById('reservation-form').reset();
+            document.getElementById('selected-table-info').style.display = 'none';
+            document.getElementById('tables-container').style.display = 'none';
+            document.getElementById('selected_table_number').value = '';
+            document.getElementById('conflict-alert').style.display = 'none';
+            document.getElementById('no-tables-message').style.display = 'none';
+            
+            // Reset to defaults
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            document.getElementById('reservation_date').valueAsDate = tomorrow;
+            document.getElementById('reservation_time').value = '12:00';
+            document.getElementById('duration_hours').value = '2';
+            
+            // Update summary
+            updateSummary();
+            
+            showToast('Form reset successfully', 'info');
+        }
+    }
+</script>
+{% endblock %}

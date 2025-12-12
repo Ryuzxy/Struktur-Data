@@ -1,0 +1,1497 @@
+{% extends "layout.html" %}
+
+{% block title %}Daily Schedule - BroderPro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/timeline.css') }}">
+<style>
+    .timeline-container {
+        position: relative;
+        padding: 20px 0;
+        background: #f8f9fa;
+        border-radius: 10px;
+        min-height: 600px;
+    }
+    
+    .time-marker {
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: #6f42c1;
+        z-index: 1;
+    }
+    
+    .time-marker::before {
+        content: attr(data-time);
+        position: absolute;
+        left: -50px;
+        top: -25px;
+        background: #6f42c1;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+    
+    .current-time-line {
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: #dc3545;
+        z-index: 2;
+    }
+    
+    .current-time-line::before {
+        content: 'NOW';
+        position: absolute;
+        left: -40px;
+        top: -10px;
+        background: #dc3545;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: bold;
+    }
+    
+    .table-column {
+        position: relative;
+        border-right: 1px solid #dee2e6;
+        min-height: 720px; /* 12 hours * 60 minutes */
+    }
+    
+    .table-header {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 10;
+        padding: 10px;
+        border-bottom: 2px solid #6f42c1;
+        text-align: center;
+        font-weight: bold;
+    }
+    
+    .reservation-block {
+        position: absolute;
+        left: 5px;
+        right: 5px;
+        border-radius: 6px;
+        padding: 8px;
+        color: white;
+        font-size: 0.85rem;
+        overflow: hidden;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        z-index: 5;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .reservation-block:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        z-index: 20;
+    }
+    
+    .reservation-block.confirmed {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        border-left: 4px solid #198754;
+    }
+    
+    .reservation-block.cancelled {
+        background: linear-gradient(135deg, #6c757d, #adb5bd);
+        border-left: 4px solid #495057;
+        opacity: 0.7;
+    }
+    
+    .reservation-block.completed {
+        background: linear-gradient(135deg, #17a2b8, #0dcaf0);
+        border-left: 4px solid #0d6efd;
+    }
+    
+    .reservation-time {
+        font-size: 0.75rem;
+        opacity: 0.9;
+        margin-bottom: 2px;
+    }
+    
+    .reservation-customer {
+        font-weight: bold;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .reservation-party {
+        font-size: 0.7rem;
+        opacity: 0.9;
+    }
+    
+    .available-slot {
+        position: absolute;
+        left: 10px;
+        right: 10px;
+        background: rgba(40, 167, 69, 0.1);
+        border: 1px dashed #28a745;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .available-slot:hover {
+        background: rgba(40, 167, 69, 0.2);
+        border-style: solid;
+    }
+    
+    .time-axis {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 10;
+        height: 60px;
+        border-bottom: 2px solid #6f42c1;
+    }
+    
+    .hour-label {
+        position: absolute;
+        top: 10px;
+        transform: translateX(-50%);
+        font-size: 0.8rem;
+        font-weight: bold;
+        color: #6f42c1;
+    }
+    
+    .half-hour-line {
+        position: absolute;
+        top: 40px;
+        height: 10px;
+        width: 1px;
+        background: #dee2e6;
+        transform: translateX(-50%);
+    }
+    
+    .schedule-controls {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .date-navigation {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+    
+    .date-display {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #6f42c1;
+        min-width: 200px;
+        text-align: center;
+    }
+    
+    .table-legend {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.85rem;
+    }
+    
+    .legend-color {
+        width: 15px;
+        height: 15px;
+        border-radius: 3px;
+    }
+    
+    .legend-confirmed { background: #28a745; }
+    .legend-cancelled { background: #6c757d; }
+    .legend-completed { background: #17a2b8; }
+    .legend-available { 
+        background: rgba(40, 167, 69, 0.1);
+        border: 1px dashed #28a745;
+    }
+    
+    .table-status-badge {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        margin-left: 5px;
+    }
+    
+    .reservation-tooltip {
+        position: fixed;
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+        max-width: 300px;
+        display: none;
+        border: 1px solid #dee2e6;
+    }
+    
+    .tooltip-header {
+        border-bottom: 2px solid #6f42c1;
+        padding-bottom: 8px;
+        margin-bottom: 10px;
+    }
+    
+    .empty-schedule {
+        text-align: center;
+        padding: 40px;
+        color: #6c757d;
+    }
+    
+    .empty-schedule i {
+        font-size: 3rem;
+        margin-bottom: 15px;
+        opacity: 0.5;
+    }
+    
+    .drag-create-area {
+        position: absolute;
+        background: rgba(111, 66, 193, 0.05);
+        border: 2px dashed #6f42c1;
+        border-radius: 6px;
+        z-index: 15;
+        display: none;
+    }
+    
+    .drag-create-info {
+        position: absolute;
+        background: #6f42c1;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        pointer-events: none;
+        z-index: 16;
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="bi bi-calendar-week"></i> Daily Schedule</h1>
+            <div class="btn-group">
+                <a href="{{ url_for('reservations.create_page') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> New Reservation
+                </a>
+                <a href="{{ url_for('reservations.index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-list-ul"></i> List View
+                </a>
+            </div>
+        </div>
+        <p class="text-muted">Visual timeline of daily reservations using Red-Black Tree time-based queries</p>
+    </div>
+</div>
+
+<!-- Schedule Controls -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="schedule-controls">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <div class="date-navigation">
+                        <button class="btn btn-outline-primary" onclick="changeDate(-1)">
+                            <i class="bi bi-chevron-left"></i> Previous
+                        </button>
+                        
+                        <div class="date-display" id="current-date-display">
+                            {{ date.strftime('%A, %B %d, %Y') }}
+                        </div>
+                        
+                        <button class="btn btn-outline-primary" onclick="changeDate(1)">
+                            Next <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-calendar"></i>
+                        </span>
+                        <input type="date" class="form-control" id="date-picker" 
+                               value="{{ date.strftime('%Y-%m-%d') }}">
+                        <button class="btn btn-primary" onclick="jumpToDate()">
+                            Go
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="btn-group w-100">
+                        <button class="btn btn-outline-info" onclick="jumpToToday()">
+                            <i class="bi bi-calendar-day"></i> Today
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="refreshSchedule()">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                        <button class="btn btn-outline-success" onclick="showAvailableSlots()">
+                            <i class="bi bi-clock"></i> Show Available
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Statistics -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="table-legend">
+                            <div class="legend-item">
+                                <div class="legend-color legend-confirmed"></div>
+                                <span>Confirmed</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color legend-cancelled"></div>
+                                <span>Cancelled</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color legend-completed"></div>
+                                <span>Completed</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color legend-available"></div>
+                                <span>Available</span>
+                            </div>
+                        </div>
+                        
+                        <div id="schedule-stats">
+                            <span class="badge bg-primary">Loading statistics...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Schedule View -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history"></i> Timeline Schedule
+                        <small class="text-muted" id="time-display"></small>
+                    </h5>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-primary" onclick="zoomIn()">
+                            <i class="bi bi-zoom-in"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="zoomOut()">
+                            <i class="bi bi-zoom-out"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="fitToScreen()">
+                            <i class="bi bi-arrows-angle-contract"></i> Fit
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Loading Indicator -->
+                <div id="loading-indicator" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Loading schedule...</span>
+                    </div>
+                    <p class="mt-3">Loading schedule data from Red-Black Tree...</p>
+                </div>
+                
+                <!-- Empty State -->
+                <div id="empty-schedule" class="empty-schedule" style="display: none;">
+                    <i class="bi bi-calendar-x"></i>
+                    <h4>No Reservations</h4>
+                    <p>No reservations scheduled for this date.</p>
+                    <a href="{{ url_for('reservations.create_page') }}" class="btn btn-primary mt-2">
+                        <i class="bi bi-plus-circle"></i> Create First Reservation
+                    </a>
+                </div>
+                
+                <!-- Schedule Container -->
+                <div id="schedule-container" class="timeline-container" style="display: none; overflow-x: auto;">
+                    <div id="time-axis" class="time-axis"></div>
+                    <div id="tables-container" class="d-flex"></div>
+                    <div id="current-time-indicator" class="current-time-line" style="display: none;"></div>
+                </div>
+                
+                <!-- Drag Create Area -->
+                <div id="drag-create-area" class="drag-create-area"></div>
+                <div id="drag-create-info" class="drag-create-info"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tooltip -->
+<div id="reservation-tooltip" class="reservation-tooltip"></div>
+
+<!-- Quick Create Modal -->
+<div class="modal fade" id="quickCreateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Quick Reservation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quick-create-form">
+                    <input type="hidden" id="quick-table-number">
+                    <input type="hidden" id="quick-start-time">
+                    <input type="hidden" id="quick-end-time">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Time Slot</label>
+                        <div class="alert alert-info" id="quick-time-slot">
+                            Loading time slot...
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="quick-customer-name" class="form-label">Customer Name *</label>
+                        <input type="text" class="form-control" id="quick-customer-name" required>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="quick-customer-phone" class="form-label">Phone Number *</label>
+                            <input type="tel" class="form-control" id="quick-customer-phone" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="quick-party-size" class="form-label">Party Size *</label>
+                            <select class="form-select" id="quick-party-size" required>
+                                <option value="">Select...</option>
+                                {% for i in range(1, 11) %}
+                                <option value="{{ i }}">{{ i }} person{{ 's' if i > 1 else '' }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="quick-duration" class="form-label">Duration</label>
+                        <select class="form-select" id="quick-duration">
+                            <option value="1">1 hour</option>
+                            <option value="1.5">1.5 hours</option>
+                            <option value="2" selected>2 hours</option>
+                            <option value="2.5">2.5 hours</option>
+                            <option value="3">3 hours</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createQuickReservation()">
+                    <i class="bi bi-calendar-plus"></i> Create Reservation
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Conflict Details Modal -->
+<div class="modal fade" id="conflictModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Schedule Conflict</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Time Slot Not Available</strong>
+                    <p id="conflict-details" class="mb-0 mt-2"></p>
+                </div>
+                
+                <div id="conflict-list" class="mt-3">
+                    <!-- Conflicts will be listed here -->
+                </div>
+                
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-outline-primary" onclick="suggestAlternativeSlots()">
+                        <i class="bi bi-clock-history"></i> Suggest Alternative Times
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- RBT Query Info Modal -->
+<div class="modal fade" id="rbtInfoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-diagram-3"></i> Red-Black Tree Query Information
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Query Details</h6>
+                        <div class="alert alert-info">
+                            <p><strong>Operation:</strong> <span id="rbt-operation"></span></p>
+                            <p><strong>Time Complexity:</strong> <code id="rbt-complexity"></code></p>
+                            <p><strong>Nodes Searched:</strong> <span id="rbt-nodes-searched"></span></p>
+                            <p><strong>Query Time:</strong> <span id="rbt-query-time"></span> ms</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Performance Metrics</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td>Total RBT Nodes:</td>
+                                    <td><strong id="rbt-total-nodes"></strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Tree Height:</td>
+                                    <td><strong id="rbt-tree-height"></strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Is Balanced:</td>
+                                    <td><strong id="rbt-is-balanced"></strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Range Search Count:</td>
+                                    <td><strong id="rbt-range-search-count"></strong></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <h6>Query Explanation</h6>
+                    <div class="alert alert-light">
+                        <small>
+                            The schedule uses <strong>Red-Black Tree range search</strong> to efficiently 
+                            find reservations in specific time ranges with O(log n + k) time complexity, 
+                            where n is total reservations and k is number of results.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Global variables
+    let currentDate = new Date("{{ date.strftime('%Y-%m-%d') }}");
+    let scheduleData = null;
+    let tableData = null;
+    let zoomLevel = 1;
+    let isDragging = false;
+    let dragStart = null;
+    let dragCurrent = null;
+    
+    // Constants
+    const OPENING_HOUR = 8; // 8:00 AM
+    const CLOSING_HOUR = 22; // 10:00 PM
+    const MINUTES_PER_HOUR = 60;
+    const PIXELS_PER_HOUR = 80; // Base pixels per hour
+    const TABLE_COUNT = 10; // Number of tables to display
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize date display
+        updateDateDisplay();
+        
+        // Load schedule data
+        loadScheduleData();
+        
+        // Update current time display
+        updateCurrentTime();
+        setInterval(updateCurrentTime, 60000); // Update every minute
+        
+        // Setup event listeners
+        document.getElementById('date-picker').addEventListener('change', function() {
+            jumpToDate();
+        });
+        
+        // Setup drag and drop for creating reservations
+        setupDragAndDrop();
+        
+        // Load table status
+        loadTableStatus();
+        
+        // Setup keyboard shortcuts
+        setupKeyboardShortcuts();
+    });
+    
+    function updateDateDisplay() {
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('current-date-display').textContent = 
+            currentDate.toLocaleDateString('en-US', options);
+        document.getElementById('date-picker').valueAsDate = currentDate;
+    }
+    
+    function updateCurrentTime() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false 
+        });
+        document.getElementById('time-display').textContent = ` • Current time: ${timeString}`;
+        
+        // Update current time indicator if schedule is loaded
+        updateCurrentTimeIndicator();
+    }
+    
+    function loadScheduleData() {
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const scheduleContainer = document.getElementById('schedule-container');
+        const emptySchedule = document.getElementById('empty-schedule');
+        
+        loadingIndicator.style.display = 'block';
+        scheduleContainer.style.display = 'none';
+        emptySchedule.style.display = 'none';
+        
+        const dateStr = currentDate.toISOString().split('T')[0];
+        
+        // Measure query performance
+        const queryStart = performance.now();
+        
+        fetch(`/reservations/api/daily-schedule/${dateStr}`)
+            .then(response => response.json())
+            .then(data => {
+                const queryEnd = performance.now();
+                const queryTime = queryEnd - queryStart;
+                
+                if (data.success) {
+                    scheduleData = data.schedule;
+                    renderSchedule(data.schedule);
+                    
+                    // Show RBT query info
+                    showRBTQueryInfo('Range Search', queryTime, Object.keys(scheduleData).length);
+                    
+                    // Update statistics
+                    updateScheduleStats(data.schedule);
+                    
+                    if (Object.keys(scheduleData).length === 0) {
+                        emptySchedule.style.display = 'block';
+                    } else {
+                        scheduleContainer.style.display = 'block';
+                    }
+                } else {
+                    showToast('Error loading schedule: ' + data.error, 'danger');
+                }
+                loadingIndicator.style.display = 'none';
+            })
+            .catch(error => {
+                console.error('Error loading schedule:', error);
+                showToast('Error loading schedule', 'danger');
+                loadingIndicator.style.display = 'none';
+                emptySchedule.style.display = 'block';
+            });
+    }
+    
+    function renderSchedule(scheduleData) {
+        const container = document.getElementById('tables-container');
+        const timeAxis = document.getElementById('time-axis');
+        
+        // Clear existing content
+        container.innerHTML = '';
+        timeAxis.innerHTML = '';
+        
+        // Generate time axis
+        for (let hour = OPENING_HOUR; hour <= CLOSING_HOUR; hour++) {
+            // Hour marker
+            const hourLabel = document.createElement('div');
+            hourLabel.className = 'hour-label';
+            hourLabel.textContent = `${hour.toString().padStart(2, '0')}:00`;
+            hourLabel.style.left = `${((hour - OPENING_HOUR) * PIXELS_PER_HOUR * zoomLevel) + 50}px`;
+            timeAxis.appendChild(hourLabel);
+            
+            // Half-hour line
+            const halfHourLine = document.createElement('div');
+            halfHourLine.className = 'half-hour-line';
+            halfHourLine.style.left = `${((hour - OPENING_HOUR + 0.5) * PIXELS_PER_HOUR * zoomLevel) + 50}px`;
+            timeAxis.appendChild(halfHourLine);
+        }
+        
+        // Generate table columns
+        for (let tableNum = 1; tableNum <= TABLE_COUNT; tableNum++) {
+            const tableColumn = document.createElement('div');
+            tableColumn.className = 'table-column';
+            tableColumn.id = `table-${tableNum}`;
+            tableColumn.style.width = `${100 / TABLE_COUNT}%`;
+            tableColumn.style.minHeight = `${(CLOSING_HOUR - OPENING_HOUR) * PIXELS_PER_HOUR * zoomLevel}px`;
+            
+            // Table header
+            const tableHeader = document.createElement('div');
+            tableHeader.className = 'table-header';
+            tableHeader.innerHTML = `
+                <div>Table ${tableNum}</div>
+                <small class="text-muted table-status" id="table-status-${tableNum}">Loading...</small>
+            `;
+            tableColumn.appendChild(tableHeader);
+            
+            // Generate time markers
+            for (let hour = OPENING_HOUR; hour <= CLOSING_HOUR; hour++) {
+                const timeMarker = document.createElement('div');
+                timeMarker.className = 'time-marker';
+                timeMarker.setAttribute('data-time', `${hour.toString().padStart(2, '0')}:00`);
+                timeMarker.style.top = `${(hour - OPENING_HOUR) * PIXELS_PER_HOUR * zoomLevel}px`;
+                tableColumn.appendChild(timeMarker);
+            }
+            
+            // Add reservations for this table
+            for (const [timeSlot, slotData] of Object.entries(scheduleData)) {
+                if (slotData.reservations) {
+                    slotData.reservations.forEach(reservation => {
+                        if (reservation.table == tableNum) {
+                            const reservationBlock = createReservationBlock(reservation, timeSlot);
+                            tableColumn.appendChild(reservationBlock);
+                        }
+                    });
+                }
+            }
+            
+            container.appendChild(tableColumn);
+        }
+        
+        // Update container width based on zoom level
+        const totalWidth = (CLOSING_HOUR - OPENING_HOUR) * PIXELS_PER_HOUR * zoomLevel + 100;
+        container.style.width = `${totalWidth}px`;
+        
+        // Update current time indicator
+        updateCurrentTimeIndicator();
+    }
+    
+    function createReservationBlock(reservation, timeSlot) {
+        const block = document.createElement('div');
+        block.className = `reservation-block ${reservation.status}`;
+        block.setAttribute('data-reservation-id', reservation.id);
+        
+        // Calculate position and size
+        const [hour, minute] = timeSlot.split(':').map(Number);
+        const startMinutes = (hour - OPENING_HOUR) * 60 + minute;
+        const durationMinutes = reservation.duration * 60;
+        
+        const top = (startMinutes / 60) * PIXELS_PER_HOUR * zoomLevel;
+        const height = (durationMinutes / 60) * PIXELS_PER_HOUR * zoomLevel;
+        
+        block.style.top = `${top}px`;
+        block.style.height = `${height}px`;
+        
+        // Add content
+        block.innerHTML = `
+            <div class="reservation-time">
+                ${formatTime(hour, minute)} - ${formatTime(hour + Math.floor(reservation.duration), 
+                minute + (reservation.duration % 1) * 60)}
+            </div>
+            <div class="reservation-customer" title="${reservation.customer}">
+                ${reservation.customer}
+            </div>
+            <div class="reservation-party">
+                ${reservation.party_size} people • ${reservation.duration}h
+            </div>
+        `;
+        
+        // Add click event
+        block.addEventListener('click', function(e) {
+            e.stopPropagation();
+            showReservationDetails(reservation.id);
+        });
+        
+        // Add hover events for tooltip
+        block.addEventListener('mouseenter', function(e) {
+            showReservationTooltip(reservation, e);
+        });
+        
+        block.addEventListener('mouseleave', function() {
+            hideReservationTooltip();
+        });
+        
+        return block;
+    }
+    
+    function updateCurrentTimeIndicator() {
+        const now = new Date();
+        const currentDateStr = now.toISOString().split('T')[0];
+        const selectedDateStr = currentDate.toISOString().split('T')[0];
+        
+        const indicator = document.getElementById('current-time-indicator');
+        
+        if (currentDateStr === selectedDateStr) {
+            const currentHour = now.getHours();
+            const currentMinute = now.getMinutes();
+            
+            if (currentHour >= OPENING_HOUR && currentHour < CLOSING_HOUR) {
+                const minutesFromOpening = (currentHour - OPENING_HOUR) * 60 + currentMinute;
+                const topPosition = (minutesFromOpening / 60) * PIXELS_PER_HOUR * zoomLevel;
+                
+                indicator.style.top = `${topPosition}px`;
+                indicator.style.display = 'block';
+            } else {
+                indicator.style.display = 'none';
+            }
+        } else {
+            indicator.style.display = 'none';
+        }
+    }
+    
+    function showReservationDetails(reservationId) {
+        window.location.href = `/reservations/api/${reservationId}`;
+    }
+    
+    function showReservationTooltip(reservation, event) {
+        const tooltip = document.getElementById('reservation-tooltip');
+        
+        const tooltipContent = `
+            <div class="tooltip-header">
+                <h6 class="mb-1">${reservation.customer}</h6>
+                <small class="text-muted">Reservation #${reservation.id}</small>
+            </div>
+            <div>
+                <p><strong>Time:</strong> ${reservation.time}</p>
+                <p><strong>Table:</strong> ${reservation.table}</p>
+                <p><strong>Party Size:</strong> ${reservation.party_size} people</p>
+                <p><strong>Duration:</strong> ${reservation.duration} hours</p>
+                <p><strong>Status:</strong> 
+                    <span class="badge bg-${getStatusColor(reservation.status)}">
+                        ${reservation.status.toUpperCase()}
+                    </span>
+                </p>
+            </div>
+            <div class="mt-2">
+                <button class="btn btn-sm btn-outline-primary" 
+                        onclick="window.location.href='/reservations/edit/${reservation.id}'">
+                    <i class="bi bi-pencil"></i> Edit
+                </button>
+                ${reservation.status !== 'cancelled' ? `
+                    <button class="btn btn-sm btn-outline-danger ms-1" 
+                            onclick="cancelReservationFromTooltip('${reservation.id}')">
+                        <i class="bi bi-x-circle"></i> Cancel
+                    </button>
+                ` : ''}
+            </div>
+        `;
+        
+        tooltip.innerHTML = tooltipContent;
+        tooltip.style.display = 'block';
+        
+        // Position tooltip near cursor
+        const x = event.clientX + 10;
+        const y = event.clientY + 10;
+        
+        tooltip.style.left = `${x}px`;
+        tooltip.style.top = `${y}px`;
+    }
+    
+    function hideReservationTooltip() {
+        const tooltip = document.getElementById('reservation-tooltip');
+        tooltip.style.display = 'none';
+    }
+    
+    function cancelReservationFromTooltip(reservationId) {
+        if (confirm('Are you sure you want to cancel this reservation?')) {
+            fetch(`/reservations/api/${reservationId}/cancel`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Reservation cancelled', 'success');
+                    loadScheduleData(); // Refresh schedule
+                    hideReservationTooltip();
+                } else {
+                    showToast(data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error cancelling reservation:', error);
+                showToast('Error cancelling reservation', 'danger');
+            });
+        }
+    }
+    
+    function updateScheduleStats(scheduleData) {
+        let totalReservations = 0;
+        let confirmedCount = 0;
+        let cancelledCount = 0;
+        let completedCount = 0;
+        
+        // Count reservations
+        for (const [timeSlot, slotData] of Object.entries(scheduleData)) {
+            if (slotData.reservations) {
+                totalReservations += slotData.reservations.length;
+                slotData.reservations.forEach(res => {
+                    if (res.status === 'confirmed') confirmedCount++;
+                    else if (res.status === 'cancelled') cancelledCount++;
+                    else if (res.status === 'completed') completedCount++;
+                });
+            }
+        }
+        
+        const statsHTML = `
+            <span class="badge bg-primary">Total: ${totalReservations}</span>
+            <span class="badge bg-success">Confirmed: ${confirmedCount}</span>
+            <span class="badge bg-danger">Cancelled: ${cancelledCount}</span>
+            <span class="badge bg-info">Completed: ${completedCount}</span>
+        `;
+        
+        document.getElementById('schedule-stats').innerHTML = statsHTML;
+    }
+    
+    function loadTableStatus() {
+        fetch('/reservations/api/table-status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    tableData = data.tables;
+                    updateTableStatusDisplay();
+                }
+            })
+            .catch(error => {
+                console.error('Error loading table status:', error);
+            });
+    }
+    
+    function updateTableStatusDisplay() {
+        if (!tableData) return;
+        
+        for (let tableNum = 1; tableNum <= TABLE_COUNT; tableNum++) {
+            const statusElement = document.getElementById(`table-status-${tableNum}`);
+            if (statusElement && tableData[tableNum]) {
+                const table = tableData[tableNum];
+                const statusBadge = getTableStatusBadge(table.status);
+                statusElement.innerHTML = statusBadge;
+            }
+        }
+    }
+    
+    function getTableStatusBadge(status) {
+        const badges = {
+            'available': '<span class="badge bg-success table-status-badge">Available</span>',
+            'occupied': '<span class="badge bg-danger table-status-badge">Occupied</span>',
+            'reserved': '<span class="badge bg-warning table-status-badge">Reserved</span>',
+            'cleaning': '<span class="badge bg-info table-status-badge">Cleaning</span>',
+            'maintenance': '<span class="badge bg-secondary table-status-badge">Maintenance</span>'
+        };
+        return badges[status] || '<span class="badge bg-light table-status-badge">Unknown</span>';
+    }
+    
+    function changeDate(days) {
+        currentDate.setDate(currentDate.getDate() + days);
+        updateDateDisplay();
+        loadScheduleData();
+    }
+    
+    function jumpToDate() {
+        const datePicker = document.getElementById('date-picker');
+        currentDate = new Date(datePicker.value);
+        updateDateDisplay();
+        loadScheduleData();
+    }
+    
+    function jumpToToday() {
+        currentDate = new Date();
+        updateDateDisplay();
+        loadScheduleData();
+    }
+    
+    function refreshSchedule() {
+        loadScheduleData();
+        loadTableStatus();
+        showToast('Schedule refreshed', 'success');
+    }
+    
+    function zoomIn() {
+        if (zoomLevel < 2) {
+            zoomLevel += 0.25;
+            applyZoom();
+        }
+    }
+    
+    function zoomOut() {
+        if (zoomLevel > 0.5) {
+            zoomLevel -= 0.25;
+            applyZoom();
+        }
+    }
+    
+    function fitToScreen() {
+        zoomLevel = 1;
+        applyZoom();
+    }
+    
+    function applyZoom() {
+        if (scheduleData) {
+            renderSchedule(scheduleData);
+        }
+    }
+    
+    function setupDragAndDrop() {
+        const scheduleContainer = document.getElementById('schedule-container');
+        const dragArea = document.getElementById('drag-create-area');
+        const dragInfo = document.getElementById('drag-create-info');
+        
+        scheduleContainer.addEventListener('mousedown', startDrag);
+        scheduleContainer.addEventListener('mousemove', handleDrag);
+        scheduleContainer.addEventListener('mouseup', endDrag);
+        
+        function startDrag(e) {
+            if (e.target.closest('.reservation-block')) return;
+            
+            const tableColumn = e.target.closest('.table-column');
+            if (!tableColumn) return;
+            
+            const tableNum = parseInt(tableColumn.id.replace('table-', ''));
+            const rect = scheduleContainer.getBoundingClientRect();
+            const y = e.clientY - rect.top;
+            
+            // Calculate time from position
+            const hour = OPENING_HOUR + (y / (PIXELS_PER_HOUR * zoomLevel));
+            const roundedHour = Math.floor(hour * 2) / 2; // Round to nearest half hour
+            
+            dragStart = {
+                table: tableNum,
+                hour: roundedHour,
+                x: e.clientX,
+                y: e.clientY
+            };
+            
+            isDragging = true;
+            dragArea.style.display = 'block';
+            dragInfo.style.display = 'block';
+        }
+        
+        function handleDrag(e) {
+            if (!isDragging || !dragStart) return;
+            
+            const rect = scheduleContainer.getBoundingClientRect();
+            const currentY = e.clientY - rect.top;
+            
+            const startHour = dragStart.hour;
+            const currentHour = OPENING_HOUR + (currentY / (PIXELS_PER_HOUR * zoomLevel));
+            
+            const duration = Math.max(0.5, Math.abs(currentHour - startHour));
+            const endHour = startHour + (currentHour > startHour ? duration : -duration);
+            
+            // Ensure within business hours
+            const minHour = Math.max(OPENING_HOUR, Math.min(startHour, endHour));
+            const maxHour = Math.min(CLOSING_HOUR, Math.max(startHour, endHour));
+            const adjustedDuration = maxHour - minHour;
+            
+            if (adjustedDuration > 0) {
+                // Update drag area
+                const top = (minHour - OPENING_HOUR) * PIXELS_PER_HOUR * zoomLevel;
+                const height = adjustedDuration * PIXELS_PER_HOUR * zoomLevel;
+                
+                dragArea.style.top = `${top}px`;
+                dragArea.style.height = `${height}px`;
+                dragArea.style.left = '10px';
+                dragArea.style.right = '10px';
+                
+                // Update info
+                const startTime = formatTimeFromDecimal(minHour);
+                const endTime = formatTimeFromDecimal(minHour + adjustedDuration);
+                
+                dragInfo.textContent = `Create reservation: ${startTime} - ${endTime} (${adjustedDuration}h)`;
+                dragInfo.style.left = `${e.clientX + 10}px`;
+                dragInfo.style.top = `${e.clientY + 10}px`;
+            }
+            
+            dragCurrent = {
+                hour: currentHour,
+                x: e.clientX,
+                y: e.clientY
+            };
+        }
+        
+        function endDrag(e) {
+            if (!isDragging || !dragStart) return;
+            
+            isDragging = false;
+            dragArea.style.display = 'none';
+            dragInfo.style.display = 'none';
+            
+            if (dragCurrent) {
+                const duration = Math.abs(dragCurrent.hour - dragStart.hour);
+                if (duration >= 0.5) { // Minimum 30 minutes
+                    const startHour = Math.min(dragStart.hour, dragCurrent.hour);
+                    const endHour = Math.max(dragStart.hour, dragCurrent.hour);
+                    
+                    // Check availability
+                    checkTimeSlotAvailability(dragStart.table, startHour, endHour);
+                }
+            }
+            
+            dragStart = null;
+            dragCurrent = null;
+        }
+    }
+    
+    function checkTimeSlotAvailability(tableNum, startHour, endHour) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const startTime = formatTimeFromDecimal(startHour);
+        const endTime = formatTimeFromDecimal(endHour);
+        const duration = endHour - startHour;
+        
+        // Check availability using RBT
+        const partySize = prompt('Enter party size:', '2');
+        if (!partySize || isNaN(partySize) || partySize < 1) return;
+        
+        const params = new URLSearchParams({
+            party_size: partySize,
+            date: dateStr,
+            time: startTime,
+            duration: duration
+        });
+        
+        fetch(`/reservations/api/available-tables?${params}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const isAvailable = data.available_tables.some(t => t.table_number === tableNum);
+                    
+                    if (isAvailable) {
+                        // Show quick create modal
+                        showQuickCreateModal(tableNum, dateStr, startTime, endTime, duration, partySize);
+                    } else {
+                        // Show conflict modal
+                        showConflictModal(tableNum, dateStr, startTime, endTime);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error checking availability:', error);
+                showToast('Error checking availability', 'danger');
+            });
+    }
+    
+    function showQuickCreateModal(tableNum, dateStr, startTime, endTime, duration, partySize) {
+        const modal = new bootstrap.Modal(document.getElementById('quickCreateModal'));
+        const timeSlotElement = document.getElementById('quick-time-slot');
+        
+        timeSlotElement.innerHTML = `
+            <strong>Table ${tableNum}</strong><br>
+            <small>${dateStr} ${startTime} - ${endTime} (${duration} hours)</small>
+        `;
+        
+        document.getElementById('quick-table-number').value = tableNum;
+        document.getElementById('quick-start-time').value = `${dateStr}T${startTime}:00`;
+        document.getElementById('quick-end-time').value = `${dateStr}T${endTime}:00`;
+        document.getElementById('quick-party-size').value = partySize;
+        document.getElementById('quick-duration').value = duration;
+        
+        // Clear form
+        document.getElementById('quick-customer-name').value = '';
+        document.getElementById('quick-customer-phone').value = '';
+        
+        modal.show();
+    }
+    
+    function createQuickReservation() {
+        const form = document.getElementById('quick-create-form');
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            return;
+        }
+        
+        const reservationData = {
+            customer_name: document.getElementById('quick-customer-name').value,
+            customer_phone: document.getElementById('quick-customer-phone').value,
+            party_size: parseInt(document.getElementById('quick-party-size').value),
+            reservation_time: document.getElementById('quick-start-time').value,
+            duration_hours: parseFloat(document.getElementById('quick-duration').value),
+            table_number: parseInt(document.getElementById('quick-table-number').value)
+        };
+        
+        fetch('/reservations/api/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(reservationData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Reservation created successfully!', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('quickCreateModal')).hide();
+                loadScheduleData();
+            } else {
+                showToast(data.error, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error creating reservation:', error);
+            showToast('Error creating reservation', 'danger');
+        });
+    }
+    
+    function showConflictModal(tableNum, dateStr, startTime, endTime) {
+        const modal = new bootstrap.Modal(document.getElementById('conflictModal'));
+        const conflictDetails = document.getElementById('conflict-details');
+        const conflictList = document.getElementById('conflict-list');
+        
+        conflictDetails.textContent = `Table ${tableNum} is not available from ${startTime} to ${endTime}.`;
+        
+        // Load conflicting reservations
+        const params = new URLSearchParams({
+            date: dateStr,
+            time: startTime,
+            duration: (parseTime(endTime) - parseTime(startTime)) / (1000 * 60 * 60)
+        });
+        
+        fetch(`/reservations/api/by-time-range?${params}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const conflicts = data.reservations.filter(r => r.table_number === tableNum);
+                    
+                    if (conflicts.length > 0) {
+                        conflictList.innerHTML = `
+                            <h6>Conflicting Reservations:</h6>
+                            <div class="list-group">
+                                ${conflicts.map(res => `
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between">
+                                            <div>
+                                                <strong>${res.customer_name}</strong><br>
+                                                <small>${new Date(res.reservation_time).toLocaleTimeString()} - 
+                                                       ${new Date(res.end_time).toLocaleTimeString()}</small>
+                                            </div>
+                                            <span class="badge bg-${getStatusColor(res.status)}">
+                                                ${res.status}
+                                            </span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error loading conflicts:', error);
+            });
+        
+        modal.show();
+    }
+    
+    function suggestAlternativeSlots() {
+        const tableNum = document.getElementById('quick-table-number').value;
+        const partySize = document.getElementById('quick-party-size').value;
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const startTime = document.getElementById('quick-start-time').value.split('T')[1].slice(0, 5);
+        
+        const params = new URLSearchParams({
+            party_size: partySize,
+            date: dateStr,
+            time: startTime,
+            duration: document.getElementById('quick-duration').value
+        });
+        
+        fetch(`/reservations/api/suggest-alternatives?${params}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.alternatives.length > 0) {
+                    const alternativesHTML = data.alternatives.map(alt => `
+                        <div class="alert alert-success">
+                            <strong>${alt.time}</strong><br>
+                            <small>${alt.available_tables} tables available</small>
+                            <button class="btn btn-sm btn-primary mt-2" 
+                                    onclick="useAlternativeTime('${alt.time}', ${tableNum})">
+                                Select This Time
+                            </button>
+                        </div>
+                    `).join('');
+                    
+                    document.getElementById('conflict-list').innerHTML += `
+                        <h6 class="mt-3">Alternative Time Slots:</h6>
+                        ${alternativesHTML}
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error suggesting alternatives:', error);
+            });
+    }
+    
+    function useAlternativeTime(timeString, tableNum) {
+        const [date, time] = timeString.split(' ');
+        document.getElementById('quick-start-time').value = `${date}T${time}:00`;
+        
+        // Recalculate end time based on duration
+        const duration = parseFloat(document.getElementById('quick-duration').value);
+        const startTime = parseTime(time);
+        const endTime = new Date(startTime.getTime() + duration * 60 * 60 * 1000);
+        const endTimeStr = endTime.toTimeString().slice(0, 5);
+        
+        document.getElementById('quick-end-time').value = `${date}T${endTimeStr}:00`;
+        
+        bootstrap.Modal.getInstance(document.getElementById('conflictModal')).hide();
+        showQuickCreateModal(tableNum, date, time, endTimeStr, duration, 
+                            document.getElementById('quick-party-size').value);
+    }
+    
+    function showAvailableSlots() {
+        const partySize = prompt('Enter party size to check availability:', '2');
+        if (!partySize || isNaN(partySize) || partySize < 1) return;
+        
+        const dateStr = currentDate.toISOString().split('T')[0];
+        
+        // Check availability for each hour
+        const availableSlots = [];
+        
+        for (let hour = OPENING_HOUR; hour < CLOSING_HOUR; hour += 0.5) {
+            const startTime = formatTimeFromDecimal(hour);
+            const duration = 2; // Check 2-hour slots
+            
+            const params = new URLSearchParams({
+                party_size: partySize,
+                date: dateStr,
+                time: startTime,
+                duration: duration
+            });
+            
+            // Note: In a real implementation, you'd want to batch these requests
+            // or create a dedicated endpoint for this
+            setTimeout(() => {
+                fetch(`/reservations/api/available-tables?${params}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.available_tables.length > 0) {
+                            availableSlots.push({
+                                time: startTime,
+                                tables: data.available_tables
+                            });
+                            
+                            // Visualize available slots
+                            visualizeAvailableSlots(availableSlots);
+                        }
+                    })
+                    .catch(console.error);
+            }, (hour - OPENING_HOUR) * 100); // Stagger requests
+        }
+        
+        showToast(`Checking availability for ${partySize} people...`, 'info');
+    }
+    
+    function visualizeAvailableSlots(slots) {
+        // This would add visual indicators for available slots
+        // Implementation depends on how you want to display them
+        console.log('Available slots:', slots);
+    }
+    
+    function showRBTQueryInfo(operation, queryTime, resultCount) {
+        // Load RBT metrics
+        fetch('/reservations/api/rbt-metrics')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const metrics = data.metrics;
+                    
+                    document.getElementById('rbt-operation').textContent = operation;
+                    document.getElementById('rbt-complexity').textContent = 
+                        operation === 'Range Search' ? 'O(log n + k)' : 'O(log n)';
+                    document.getElementById('rbt-nodes-searched').textContent = resultCount;
+                    document.getElementById('rbt-query-time').textContent = queryTime.toFixed(2);
+                    document.getElementById('rbt-total-nodes').textContent = metrics.total_nodes;
+                    document.getElementById('rbt-tree-height').textContent = metrics.tree_height;
+                    document.getElementById('rbt-is-balanced').textContent = metrics.is_valid ? 'Yes' : 'No';
+                    document.getElementById('rbt-range-search-count').textContent = 
+                        metrics.operations.range_search_count;
+                    
+                    // Show info tooltip or log to console
+                    console.log(`RBT Query: ${operation}, Time: ${queryTime.toFixed(2)}ms, Results: ${resultCount}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading RBT metrics:', error);
+            });
+    }
+    
+    function setupKeyboardShortcuts() {
+        document.addEventListener('keydown', function(e) {
+            // Ctrl + Left/Right to navigate dates
+            if (e.ctrlKey) {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    changeDate(-1);
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    changeDate(1);
+                } else if (e.key === 't') {
+                    e.preventDefault();
+                    jumpToToday();
+                }
+            }
+            
+            // Plus/Minus to zoom
+            if (e.key === '+' || e.key === '=') {
+                e.preventDefault();
+                zoomIn();
+            } else if (e.key === '-' || e.key === '_') {
+                e.preventDefault();
+                zoomOut();
+            } else if (e.key === '0') {
+                e.preventDefault();
+                fitToScreen();
+            }
+            
+            // R to refresh
+            if (e.key === 'r' || e.key === 'R') {
+                refreshSchedule();
+            }
+        });
+    }
+    
+    // Utility functions
+    function formatTime(hour, minute) {
+        const h = Math.floor(hour);
+        const m = Math.floor(minute);
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    }
+    
+    function formatTimeFromDecimal(decimalHour) {
+        const hour = Math.floor(decimalHour);
+        const minute = Math.round((decimalHour - hour) * 60);
+        return formatTime(hour, minute);
+    }
+    
+    function parseTime(timeStr) {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        const date = new Date(currentDate);
+        date.setHours(hours, minutes, 0, 0);
+        return date;
+    }
+    
+    function getStatusColor(status) {
+        switch(status) {
+            case 'confirmed': return 'success';
+            case 'cancelled': return 'danger';
+            case 'completed': return 'info';
+            default: return 'secondary';
+        }
+    }
+</script>
+{% endblock %}

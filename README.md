@@ -96,7 +96,7 @@ Setelah berhasil dijalankan, aplikasi akan tersedia di alamat lokal (misalnya: `
 
 ## Lisensi
 
-Proyek ini dirilis di bawah Lisensi [Sebutkan jenis lisensi, misal: MIT License] - lihat file `LICENSE` (jika ada) untuk detail lebih lanjut.
+Proyek ini dirilis di bawah Lisensi [MIT License] - lihat file `LICENSE` (jika ada) untuk detail lebih lanjut.
 
 ## Kontribusi
 

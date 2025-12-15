@@ -1,0 +1,36 @@
+{
+  "reservations": [
+    {
+      "id": "d2985404",
+      "customer_name": "Ryu",
+      "customer_phone": "081-234-567891",
+      "party_size": 2,
+      "reservation_time": "2025-12-16T12:00:00",
+      "duration_hours": 1,
+      "end_time": "2025-12-16T13:00:00",
+      "table_number": 1,
+      "special_requests": "",
+      "status": "confirmed",
+      "created_at": "2025-12-15T08:27:47.721525",
+      "updated_at": "2025-12-15T08:27:47.721527",
+      "rbt_key": 1765861200784.0
+    },
+    {
+      "id": "b6ef2067",
+      "customer_name": "Ryu",
+      "customer_phone": "081-234-567891",
+      "party_size": 1,
+      "reservation_time": "2025-12-15T12:00:00",
+      "duration_hours": 2,
+      "end_time": "2025-12-15T14:00:00",
+      "table_number": 1,
+      "special_requests": "",
+      "status": "confirmed",
+      "created_at": "2025-12-15T08:28:42.040352",
+      "updated_at": "2025-12-15T08:28:42.040353",
+      "rbt_key": 1765774800103.0
+    }
+  ],
+  "count": 2,
+  "last_updated": "2025-12-15T08:28:42.041097"
+}

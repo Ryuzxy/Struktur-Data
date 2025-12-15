@@ -25,7 +25,7 @@
     <div class="col-md-3 mb-4">
         <div class="card text-white bg-success">
             <div class="card-body text-center">
-                <h1 class="display-4">{{ stats.total_reservations }}</h1>
+                <h1 class="display-4">{{ stats.get('total_reservations', 0) }}</h1>
                 <p class="card-text">Total Reservations</p>
             </div>
         </div>
@@ -34,7 +34,7 @@
     <div class="col-md-3 mb-4">
         <div class="card text-white bg-info">
             <div class="card-body text-center">
-                <h1 class="display-4">{{ stats.today_count }}</h1>
+                <h1 class="display-4">{{ stats.get('today_count', 0) }}</h1>
                 <p class="card-text">Today's Reservations</p>
             </div>
         </div>
@@ -43,7 +43,7 @@
     <div class="col-md-3 mb-4">
         <div class="card text-white bg-warning">
             <div class="card-body text-center">
-                <h1 class="display-4">{{ stats.rbt_size }}</h1>
+                <h1 class="display-4">{{ stats.get('rbt_size', 0) }}</h1>
                 <p class="card-text">RBT Nodes</p>
             </div>
         </div>
@@ -52,7 +52,7 @@
     <div class="col-md-3 mb-4">
         <div class="card text-white bg-danger">
             <div class="card-body text-center">
-                <h1 class="display-4">{{ stats.rbt_height }}</h1>
+                <h1 class="display-4">{{ stats.get('rbt_height', 0) }}</h1>
                 <p class="card-text">RBT Height</p>
             </div>
         </div>
@@ -74,8 +74,8 @@
                     <a href="{{ url_for('reservations.schedule_page') }}" class="btn btn-secondary btn-lg">
                         <i class="bi bi-calendar-week"></i> View Schedule
                     </a>
-                    <a href="{{ url_for('rbt_visualizer') }}" class="btn btn-info btn-lg">
-                        <i class="bi bi-diagram-3"></i> View RBT Structure
+                    <a href="{{ url_for('index') }}" class="btn btn-info btn-lg">
+                        <i class="bi bi-diagram-3"></i> View Dashboard
                     </a>
                 </div>
             </div>
@@ -93,35 +93,12 @@
                     <div class="col-6">
                         <p><strong>Algorithm:</strong> Red-Black Tree</p>
                         <p><strong>Complexity:</strong> O(log n)</p>
-                        <p><strong>Tables:</strong> {{ stats.table_count }}</p>
+                        <p><strong>Tables:</strong> {{ stats.get('table_count', 0) }}</p>
                     </div>
                     <div class="col-6">
                         <p><strong>Business Hours:</strong> 08:00 - 22:00</p>
-                        <p><strong>Avg Party Size:</strong> {{ stats.average_party_size }}</p>
-                        <p><strong>Available Now:</strong> {{ stats.available_tables_now }}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <!-- Today's Schedule -->
-    <div class="col-12 mb-4">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-calendar-day"></i> Today's Schedule</span>
-                <span class="badge bg-primary">{{ stats.today_count }} reservations</span>
-            </div>
-            <div class="card-body">
-                <div id="today-schedule" 
-                     hx-get="/reservations/api/daily-schedule/{{ now().strftime('%Y-%m-%d') }}" 
-                     hx-trigger="load">
-                    <div class="text-center">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
+                        <p><strong>Avg Party Size:</strong> {{ stats.get('average_party_size', 0) }}</p>
+                        <p><strong>Available Now:</strong> {{ stats.get('available_tables_now', 0) }}</p>
                     </div>
                 </div>
             </div>
@@ -150,25 +127,25 @@
                         <tbody>
                             <tr>
                                 <td>Insert</td>
-                                <td>{{ stats.rbt_operations.insert_count }}</td>
+                                <td>{{ stats.get('rbt_operations', {}).get('insert_count', 0) }}</td>
                                 <td>O(log n)</td>
                                 <td>Add new reservation to tree</td>
                             </tr>
                             <tr>
                                 <td>Search</td>
-                                <td>{{ stats.rbt_operations.search_count }}</td>
+                                <td>{{ stats.get('rbt_operations', {}).get('search_count', 0) }}</td>
                                 <td>O(log n)</td>
                                 <td>Find reservation by key</td>
                             </tr>
                             <tr>
                                 <td>Range Search</td>
-                                <td>{{ stats.rbt_operations.range_search_count }}</td>
+                                <td>{{ stats.get('rbt_operations', {}).get('range_search_count', 0) }}</td>
                                 <td>O(log n + k)</td>
                                 <td>Find reservations in time range</td>
                             </tr>
                             <tr>
                                 <td>Delete</td>
-                                <td>{{ stats.rbt_operations.delete_count }}</td>
+                                <td>{{ stats.get('rbt_operations', {}).get('delete_count', 0) }}</td>
                                 <td>O(log n)</td>
                                 <td>Cancel/remove reservation</td>
                             </tr>
@@ -179,13 +156,90 @@
         </div>
     </div>
 </div>
+
+<!-- Today's Schedule Section -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-calendar-day"></i> Today's Schedule</span>
+                <span class="badge bg-primary">{{ stats.get('today_count', 0) }} reservations</span>
+            </div>
+            <div class="card-body">
+                <div id="today-schedule">
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-info-circle"></i>
+                        <p>Schedule will be loaded here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    // Auto-refresh schedule every 30 seconds
-    setInterval(() => {
-        htmx.trigger('#today-schedule', 'refresh');
-    }, 30000);
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load today's schedule
+        const today = new Date().toISOString().split('T')[0];
+        
+        fetch(`/reservations/api/daily-schedule/${today}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.schedule) {
+                    renderTodaySchedule(data.schedule);
+                } else {
+                    console.log('No schedule data available');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading schedule:', error);
+            });
+    });
+    
+    function renderTodaySchedule(schedule) {
+        const container = document.getElementById('today-schedule');
+        
+        if (Object.keys(schedule).length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-calendar-check"></i>
+                    <p>No reservations for today</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div class="row">';
+        
+        Object.entries(schedule).forEach(([time, data]) => {
+            const reservations = data.reservations || [];
+            
+            html += `
+                <div class="col-md-6 mb-3">
+                    <div class="card border-left-primary">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="bi bi-clock"></i> ${time}
+                            </h6>
+                            ${reservations.length > 0 ? 
+                                reservations.map(res => `
+                                    <div class="alert alert-info mb-2">
+                                        <small><strong>${res.customer}</strong> (${res.party_size} people)</small><br>
+                                        <small>Table ${res.table || 'N/A'}</small>
+                                    </div>
+                                `).join('') : 
+                                '<small class="text-muted">No reservations</small>'
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+    }
 </script>
 {% endblock %}

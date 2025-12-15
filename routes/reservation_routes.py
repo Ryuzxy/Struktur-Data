@@ -2,7 +2,7 @@
 Reservation Routes for Flask
 """
 from flask import Blueprint, request, jsonify, render_template
-from datetime import datetime
+from datetime import datetime, timedelta
 from services.reservation_service import ReservationService
 
 reservation_bp = Blueprint('reservations', __name__, url_prefix='/reservations')
@@ -12,8 +12,8 @@ service = ReservationService()
 
 @reservation_bp.route('/')
 def index():
-    """Reservation dashboard"""
-    return render_template('reservations/index.html')
+    """Reservation list page"""
+    return render_template('reservations/list.html')
 
 @reservation_bp.route('/create')
 def create_page():
@@ -22,10 +22,9 @@ def create_page():
 
 @reservation_bp.route('/schedule')
 def schedule_page():
-    """Daily schedule page"""
-    date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-    date = datetime.strptime(date_str, '%Y-%m-%d').date()
-    return render_template('reservations/schedule.html', date=date)
+    """Schedule view page"""
+    current_date = datetime.now().date()
+    return render_template('reservations/schedule.html', date=current_date)
 
 @reservation_bp.route('/list')
 def list_page():
@@ -34,23 +33,234 @@ def list_page():
 
 # -------------------- API Routes --------------------
 
+@reservation_bp.route('/api/all')
+def get_all_reservations():
+    """Get all reservations"""
+    try:
+        reservations = service.get_all_reservations()
+        return jsonify({
+            'success': True,
+            'count': len(reservations),
+            'reservations': [r.to_dict() for r in reservations]
+        }), 200
+    except Exception as e:
+        print(f"Error getting all reservations: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@reservation_bp.route('/api/daily-schedule/<date_str>')
+def get_daily_schedule(date_str):
+    """Get daily schedule for a specific date using RBT range search"""
+    try:
+        # Parse date
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        
+        # Get all reservations for the day
+        all_reservations = service.get_all_reservations()
+        
+        # Filter reservations for this date
+        day_reservations = [
+            r for r in all_reservations 
+            if r.reservation_time.date() == target_date
+        ]
+        
+        # Organize by time slots
+        schedule = {}
+        for res in day_reservations:
+            time_key = res.reservation_time.strftime('%H:%M')
+            
+            if time_key not in schedule:
+                schedule[time_key] = {
+                    'reservations': []
+                }
+            
+            schedule[time_key]['reservations'].append({
+                'id': res.id,
+                'customer': res.customer_name,
+                'phone': res.customer_phone,
+                'table': res.table_number or 0,
+                'party_size': res.party_size,
+                'time': res.reservation_time.strftime('%H:%M'),
+                'end_time': res.end_time.strftime('%H:%M'),
+                'duration': res.duration_hours,
+                'status': res.status,
+                'special_requests': res.special_requests
+            })
+        
+        # Sort by time
+        sorted_schedule = dict(sorted(schedule.items()))
+        
+        return jsonify({
+            'success': True,
+            'date': date_str,
+            'schedule': sorted_schedule,
+            'total_reservations': len(day_reservations),
+            'count': len(day_reservations)
+        }), 200
+        
+    except ValueError:
+        return jsonify({
+            'success': False,
+            'error': 'Invalid date format. Use YYYY-MM-DD'
+        }), 400
+    except Exception as e:
+        print(f"Error getting daily schedule: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@reservation_bp.route('/api/table-status')
+def get_table_status():
+    """Get current status of all tables"""
+    try:
+        current_time = datetime.now()
+        
+        # Initialize all tables as available
+        tables = {}
+        for table_num in range(1, 16):  # 15 tables
+            tables[table_num] = {
+                'number': table_num,
+                'status': 'available',
+                'current_reservation': None
+            }
+        
+        # Get active reservations
+        active_reservations = service.get_active_reservations()
+        
+        for res in active_reservations:
+            if res.table_number and res.table_number in tables:
+                tables[res.table_number]['status'] = 'occupied'
+                tables[res.table_number]['current_reservation'] = {
+                    'id': res.id,
+                    'customer': res.customer_name,
+                    'end_time': res.end_time.isoformat()
+                }
+        
+        return jsonify({
+            'success': True,
+            'tables': tables
+        }), 200
+    except Exception as e:
+        print(f"Error getting table status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@reservation_bp.route('/api/rbt-metrics')
+def get_rbt_metrics():
+    """Get Red-Black Tree performance metrics"""
+    try:
+        # Get RBT metrics from repository
+        metrics = service.get_rbt_metrics()
+        
+        return jsonify({
+            'success': True,
+            'metrics': metrics
+        }), 200
+    except Exception as e:
+        print(f"Error getting RBT metrics: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@reservation_bp.route('/api/available-tables')
+def get_available_tables():
+    """Get available tables for date/time"""
+    try:
+        date_str = request.args.get('date')
+        time_str = request.args.get('time', '12:00')
+        party_size = request.args.get('party_size', 2, type=int)
+        duration = request.args.get('duration', 2, type=int)
+        
+        if not date_str:
+            return jsonify({
+                'success': False,
+                'error': 'Date parameter required'
+            }), 400
+        
+        date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        time = datetime.strptime(time_str, '%H:%M').time()
+        reservation_datetime = datetime.combine(date, time)
+        
+        available = service.find_available_tables(
+            party_size=party_size,
+            check_time=reservation_datetime,
+            duration_hours=duration
+        )
+        
+        return jsonify({
+            'success': True,
+            'available_tables': [{'table_number': t} for t in available]
+        }), 200
+    except Exception as e:
+        print(f"Error checking available tables: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @reservation_bp.route('/api/create', methods=['POST'])
 def create_reservation():
     """Create new reservation"""
     try:
         data = request.get_json()
         
-        # Parse datetime
-        reservation_time = datetime.fromisoformat(data['reservation_time'].replace('Z', '+00:00'))
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No JSON data provided'
+            }), 400
+        
+        # Validate required fields
+        required_fields = ['customer_name', 'customer_phone', 'party_size', 
+                          'reservation_time', 'table_number']
+        missing_fields = [f for f in required_fields if f not in data or data[f] is None]
+        if missing_fields:
+            return jsonify({
+                'success': False,
+                'error': f'Missing required fields: {", ".join(missing_fields)}'
+            }), 400
+        
+        # Parse datetime safely
+        try:
+            reservation_time_str = data['reservation_time'].strip()
+            if reservation_time_str.endswith('Z'):
+                reservation_time_str = reservation_time_str[:-1]
+            
+            reservation_time = datetime.fromisoformat(reservation_time_str)
+        except (ValueError, AttributeError) as e:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid datetime format: {str(e)}'
+            }), 400
+        
+        # Parse numeric fields safely
+        try:
+            party_size = int(data['party_size'])
+            duration_hours = int(data.get('duration_hours', 2))
+            table_number = int(data['table_number'])
+        except (ValueError, TypeError) as e:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid numeric value: {str(e)}'
+            }), 400
         
         # Create reservation
         success, message, reservation = service.create_reservation(
-            customer_name=data['customer_name'],
-            customer_phone=data['customer_phone'],
-            party_size=int(data['party_size']),
+            customer_name=str(data['customer_name']).strip(),
+            customer_phone=str(data['customer_phone']).strip(),
+            party_size=party_size,
             reservation_time=reservation_time,
-            duration_hours=int(data.get('duration_hours', 2)),
-            special_requests=data.get('special_requests', '')
+            duration_hours=duration_hours,
+            special_requests=str(data.get('special_requests', '')).strip(),
+            table_number=table_number
         )
         
         if success:
@@ -66,64 +276,30 @@ def create_reservation():
             }), 400
             
     except Exception as e:
+        import traceback
+        print(f"Error creating reservation: {str(e)}")
+        print(traceback.format_exc())
+        
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': f'Server error: {str(e)}'
         }), 500
 
 @reservation_bp.route('/api/<reservation_id>')
 def get_reservation(reservation_id):
-    """Get reservation by ID"""
-    reservation = service.get_reservation(reservation_id)
-    
-    if reservation:
-        return jsonify({
-            'success': True,
-            'reservation': reservation.to_dict()
-        })
-    else:
-        return jsonify({
-            'success': False,
-            'error': 'Reservation not found'
-        }), 404
-
-@reservation_bp.route('/api/<reservation_id>', methods=['PUT'])
-def update_reservation(reservation_id):
-    """Update reservation"""
+    """Get single reservation"""
     try:
-        data = request.get_json()
-        updates = {}
-        
-        # Parse fields that need conversion
-        if 'reservation_time' in data:
-            updates['reservation_time'] = datetime.fromisoformat(
-                data['reservation_time'].replace('Z', '+00:00')
-            )
-        
-        if 'duration_hours' in data:
-            updates['duration_hours'] = int(data['duration_hours'])
-        
-        if 'party_size' in data:
-            updates['party_size'] = int(data['party_size'])
-        
-        # Add other fields
-        for field in ['customer_name', 'customer_phone', 'special_requests', 'status']:
-            if field in data:
-                updates[field] = data[field]
-        
-        success, message = service.update_reservation(reservation_id, **updates)
-        
-        if success:
+        reservation = service.get_reservation(reservation_id)
+        if reservation:
             return jsonify({
                 'success': True,
-                'message': message
-            })
+                'reservation': reservation.to_dict()
+            }), 200
         else:
             return jsonify({
                 'success': False,
-                'error': message
-            }), 400
-            
+                'error': 'Reservation not found'
+            }), 404
     except Exception as e:
         return jsonify({
             'success': False,
@@ -132,198 +308,87 @@ def update_reservation(reservation_id):
 
 @reservation_bp.route('/api/<reservation_id>/cancel', methods=['POST'])
 def cancel_reservation(reservation_id):
-    """Cancel reservation"""
-    success, message = service.cancel_reservation(reservation_id)
-    
-    if success:
-        return jsonify({
-            'success': True,
-            'message': message
-        })
-    else:
-        return jsonify({
-            'success': False,
-            'error': message
-        }), 404
-
-@reservation_bp.route('/api/by-date/<date_str>')
-def get_reservations_by_date(date_str):
-    """Get reservations by date"""
+    """Cancel reservation (soft delete)"""
     try:
-        date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        reservations = service.get_reservations_by_date(date)
+        success, message = service.cancel_reservation(reservation_id)
         
-        return jsonify({
-            'success': True,
-            'date': date_str,
-            'reservations': [r.to_dict() for r in reservations],
-            'count': len(reservations)
-        })
-        
-    except ValueError:
-        return jsonify({
-            'success': False,
-            'error': 'Invalid date format. Use YYYY-MM-DD'
-        }), 400
-
-@reservation_bp.route('/api/by-customer/<customer_name>')
-def get_reservations_by_customer(customer_name):
-    """Get reservations by customer name"""
-    reservations = service.get_reservations_by_customer(customer_name)
-    
-    return jsonify({
-        'success': True,
-        'customer': customer_name,
-        'reservations': [r.to_dict() for r in reservations],
-        'count': len(reservations)
-    })
-
-@reservation_bp.route('/api/upcoming')
-def get_upcoming_reservations():
-    """Get upcoming reservations"""
-    hours_ahead = request.args.get('hours', default=24, type=int)
-    reservations = service.get_upcoming_reservations(hours_ahead)
-    
-    return jsonify({
-        'success': True,
-        'reservations': [r.to_dict() for r in reservations],
-        'count': len(reservations)
-    })
-
-@reservation_bp.route('/api/active')
-def get_active_reservations():
-    """Get currently active reservations"""
-    reservations = service.get_active_reservations()
-    
-    return jsonify({
-        'success': True,
-        'reservations': [r.to_dict() for r in reservations],
-        'count': len(reservations)
-    })
-
-@reservation_bp.route('/api/available-tables')
-def get_available_tables():
-    """Find available tables"""
-    try:
-        party_size = request.args.get('party_size', default=2, type=int)
-        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-        time_str = request.args.get('time', '12:00')
-        duration = request.args.get('duration', default=2, type=int)
-        
-        # Combine date and time
-        datetime_str = f"{date_str}T{time_str}"
-        reservation_time = datetime.fromisoformat(datetime_str)
-        
-        tables = service.find_available_tables(party_size, reservation_time, duration)
-        
-        return jsonify({
-            'success': True,
-            'party_size': party_size,
-            'time': reservation_time.isoformat(),
-            'duration': duration,
-            'available_tables': tables,
-            'count': len(tables)
-        })
-        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 400
     except Exception as e:
         return jsonify({
             'success': False,
             'error': str(e)
-        }), 400
+        }), 500
 
-@reservation_bp.route('/api/table-status')
-def get_table_status():
-    """Get table status"""
-    status = service.get_table_status()
-    
-    return jsonify({
-        'success': True,
-        'tables': status
-    })
-
-@reservation_bp.route('/api/suggest-alternatives')
-def suggest_alternative_times():
-    """Suggest alternative times"""
+@reservation_bp.route('/api/<reservation_id>', methods=['DELETE'])
+def delete_reservation(reservation_id):
+    """Delete reservation permanently"""
     try:
-        party_size = request.args.get('party_size', default=2, type=int)
-        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-        time_str = request.args.get('time', '12:00')
-        duration = request.args.get('duration', default=2, type=int)
+        success, message = service.delete_reservation_permanently(reservation_id)
         
-        # Combine date and time
-        datetime_str = f"{date_str}T{time_str}"
-        desired_time = datetime.fromisoformat(datetime_str)
-        
-        alternatives = service.suggest_alternative_times(
-            desired_time, party_size, duration
-        )
-        
-        # Format alternatives for response
-        formatted_alternatives = []
-        for alt in alternatives:
-            formatted_alternatives.append({
-                'time': alt['time'].strftime('%Y-%m-%d %H:%M'),
-                'available_tables': alt['available_tables'],
-                'table_numbers': alt['table_numbers']
-            })
-        
-        return jsonify({
-            'success': True,
-            'desired_time': desired_time.strftime('%Y-%m-%d %H:%M'),
-            'alternatives': formatted_alternatives
-        })
-        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 400
     except Exception as e:
         return jsonify({
             'success': False,
             'error': str(e)
-        }), 400
+        }), 500
 
 @reservation_bp.route('/api/statistics')
 def get_statistics():
     """Get reservation statistics"""
-    stats = service.get_statistics()
-    
-    return jsonify({
-        'success': True,
-        'statistics': stats
-    })
-
-@reservation_bp.route('/api/daily-schedule/<date_str>')
-def get_daily_schedule(date_str):
-    """Get daily schedule"""
     try:
-        date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        schedule = service.get_daily_schedule(date)
+        stats = service.get_statistics()
         
         return jsonify({
             'success': True,
-            'date': date_str,
-            'schedule': schedule
-        })
-        
-    except ValueError:
+            'statistics': stats
+        }), 200
+    except Exception as e:
         return jsonify({
             'success': False,
-            'error': 'Invalid date format. Use YYYY-MM-DD'
-        }), 400
+            'error': str(e)
+        }), 500
 
-@reservation_bp.route('/api/rbt-metrics')
-def get_rbt_metrics():
-    """Get RBT performance metrics"""
-    metrics = service.get_rbt_performance_metrics()
-    
-    return jsonify({
-        'success': True,
-        'metrics': metrics
-    })
-
-@reservation_bp.route('/api/rbt-structure')
-def get_rbt_structure():
-    """Get RBT structure for visualization"""
-    structure = service.export_rbt_structure()
-    
-    return jsonify({
-        'success': True,
-        'structure': structure
-    })
+@reservation_bp.route('/api/bulk-update', methods=['POST'])
+def bulk_update():
+    """Bulk update reservations"""
+    try:
+        data = request.get_json()
+        reservation_ids = data.get('reservation_ids', [])
+        updates = data.get('updates', {})
+        
+        if not reservation_ids:
+            return jsonify({
+                'success': False,
+                'error': 'No reservations selected'
+            }), 400
+        
+        success, message, count = service.bulk_update_reservations(reservation_ids, updates)
+        
+        return jsonify({
+            'success': success,
+            'message': message,
+            'updated_count': count
+        }), 200 if success else 400
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

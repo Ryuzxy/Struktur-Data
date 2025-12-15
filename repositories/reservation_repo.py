@@ -2,7 +2,6 @@
 Reservation Repository with RBT integration
 """
 import json
-import pickle
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -28,31 +27,47 @@ class ReservationRepository:
     def _load_from_storage(self):
         """Load reservations from storage file"""
         try:
-            Path(self.storage_file).parent.mkdir(parents=True, exist_ok=True)
+            storage_path = Path(self.storage_file)
+            storage_path.parent.mkdir(parents=True, exist_ok=True)
             
-            if Path(self.storage_file).exists():
-                with open(self.storage_file, 'r') as f:
+            if storage_path.exists():
+                with open(storage_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     
-                for reservation_data in data:
-                    reservation = Reservation.from_dict(reservation_data)
-                    self.reservations[reservation.id] = reservation
-                    self.rbtree.insert(reservation.rbt_key, reservation)
-                    
+                    # Load reservations from JSON
+                    for res_data in data.get('reservations', []):
+                        reservation = Reservation.from_dict(res_data)
+                        self.reservations[reservation.id] = reservation
+                        self.rbtree.insert(reservation.rbt_key, reservation)
+                        
                 print(f"Loaded {len(self.reservations)} reservations from storage")
+            else:
+                print(f"Storage file not found: {self.storage_file}")
+                
         except Exception as e:
-            print(f"Error loading reservations: {e}")
-            # Start with empty repository
-    
+            print(f"Error loading reservations from storage: {str(e)}")
+            self.reservations = {}
+            self.rbtree = RedBlackTree()
+
     def _save_to_storage(self):
         """Save reservations to storage file"""
         try:
-            data = [res.to_dict() for res in self.reservations.values()]
+            storage_path = Path(self.storage_file)
+            storage_path.parent.mkdir(parents=True, exist_ok=True)
             
-            with open(self.storage_file, 'w') as f:
-                json.dump(data, f, indent=2, default=str)
+            data = {
+                'reservations': [res.to_dict() for res in self.reservations.values()],
+                'count': len(self.reservations),
+                'last_updated': datetime.now().isoformat()
+            }
+            
+            with open(storage_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                
+            print(f"Saved {len(self.reservations)} reservations to storage")
+            
         except Exception as e:
-            print(f"Error saving reservations: {e}")
+            print(f"Error saving reservations to storage: {str(e)}")
     
     def add(self, reservation: Reservation) -> bool:
         """

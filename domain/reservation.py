@@ -38,9 +38,12 @@ class Reservation:
         self.updated_at = datetime.now()
         
         # RBT key for efficient searching
-        # Format: timestamp.unique_id to ensure uniqueness
+        # Format: timestamp + unique_id to ensure uniqueness
         timestamp = reservation_time.timestamp()
-        self.rbt_key = float(f"{timestamp}.{reservation_id % 1000:03d}")
+        # Convert reservation_id to integer hash for modulo operation
+        id_hash = hash(reservation_id) % 1000
+        # Combine as single float: timestamp.idhash (e.g., 1765947600852)
+        self.rbt_key = float(int(timestamp * 1000) + id_hash)
         
     def __repr__(self):
         return (f"Reservation(id={self.id}, customer={self.customer_name}, "
@@ -91,25 +94,25 @@ class Reservation:
             dict: Dictionary representation
         """
         return {
-            'id': self.id,
-            'customer_name': self.customer_name,
-            'customer_phone': self.customer_phone,
-            'party_size': self.party_size,
+            'id': str(self.id),
+            'customer_name': str(self.customer_name),
+            'customer_phone': str(self.customer_phone),
+            'party_size': int(self.party_size),
             'reservation_time': self.reservation_time.isoformat(),
-            'duration_hours': self.duration_hours,
+            'duration_hours': int(self.duration_hours),
             'end_time': self.end_time.isoformat(),
-            'table_number': self.table_number,
-            'special_requests': self.special_requests,
-            'status': self.status,
+            'table_number': int(self.table_number) if self.table_number else None,
+            'special_requests': str(self.special_requests),
+            'status': str(self.status),
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
-            'rbt_key': self.rbt_key
+            'rbt_key': float(self.rbt_key)
         }
     
     @classmethod
     def from_dict(cls, data):
         """
-        Create Reservation from dictionary
+        Create reservation from dictionary
         
         Args:
             data: Dictionary with reservation data
@@ -117,20 +120,16 @@ class Reservation:
         Returns:
             Reservation object
         """
-        reservation = cls(
+        return cls(
             reservation_id=data['id'],
             customer_name=data['customer_name'],
             customer_phone=data['customer_phone'],
-            party_size=data['party_size'],
+            party_size=int(data['party_size']),
             reservation_time=datetime.fromisoformat(data['reservation_time']),
-            duration_hours=data['duration_hours'],
-            table_number=data['table_number'],
-            special_requests=data['special_requests']
+            duration_hours=int(data.get('duration_hours', 2)),
+            table_number=int(data['table_number']) if data.get('table_number') else None,
+            special_requests=data.get('special_requests', '')
         )
-        reservation.status = data['status']
-        reservation.created_at = datetime.fromisoformat(data['created_at'])
-        reservation.updated_at = datetime.fromisoformat(data['updated_at'])
-        return reservation
     
     def update_status(self, new_status):
         """
@@ -198,8 +197,11 @@ class ReservationFactory:
         if not customer_name or len(customer_name.strip()) < 2:
             return False, "Customer name must be at least 2 characters"
             
-        if party_size < 1 or party_size > 20:
+        if not isinstance(party_size, int) or party_size < 1 or party_size > 20:
             return False, "Party size must be between 1 and 20"
+            
+        if not isinstance(reservation_time, datetime):
+            return False, "Reservation time must be a datetime object"
             
         if reservation_time < datetime.now():
             return False, "Reservation time cannot be in the past"

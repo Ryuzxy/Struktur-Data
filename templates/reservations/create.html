@@ -578,16 +578,29 @@
             return;
         }
         
+        // Validasi table sudah dipilih
+        const tableNumber = document.getElementById('selected_table_number').value;
+        if (!tableNumber) {
+            showToast('Please select a table', 'warning');
+            return;
+        }
+        
         // Get form data
         const reservationData = {
-            customer_name: document.getElementById('customer_name').value,
-            customer_phone: document.getElementById('customer_phone').value,
+            customer_name: document.getElementById('customer_name').value.trim(),
+            customer_phone: document.getElementById('customer_phone').value.trim(),
             party_size: parseInt(document.getElementById('party_size').value),
             reservation_time: `${document.getElementById('reservation_date').value}T${document.getElementById('reservation_time').value}:00`,
-            duration_hours: parseFloat(document.getElementById('duration_hours').value),
-            special_requests: document.getElementById('special_requests').value,
-            table_number: parseInt(document.getElementById('selected_table_number').value)
+            duration_hours: parseInt(document.getElementById('duration_hours').value),
+            special_requests: document.getElementById('special_requests').value.trim(),
+            table_number: parseInt(tableNumber)  // Kirim table_number
         };
+        
+        // Validasi data
+        if (!reservationData.customer_name || reservationData.customer_name.length < 2) {
+            showToast('Customer name must be at least 2 characters', 'warning');
+            return;
+        }
         
         // Disable submit button
         const submitBtn = document.getElementById('submit-btn');
@@ -602,55 +615,40 @@
             },
             body: JSON.stringify(reservationData)
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 showToast('Reservation created successfully!', 'success');
                 
-                // Show confirmation
                 const reservation = data.reservation;
                 const date = new Date(reservation.reservation_time);
                 
+                // Reset form
                 document.getElementById('reservation-form').reset();
                 document.getElementById('selected-table-info').style.display = 'none';
                 document.getElementById('tables-container').style.display = 'none';
                 document.getElementById('selected_table_number').value = '';
                 
-                // Reset form to defaults
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                document.getElementById('reservation_date').valueAsDate = tomorrow;
-                document.getElementById('reservation_time').value = '12:00';
-                document.getElementById('duration_hours').value = '2';
-                
-                // Show success message with details
+                // Redirect after 1 second
                 setTimeout(() => {
-                    alert(`
-                        ✅ RESERVATION CONFIRMED!
-                        
-                        Reservation ID: ${reservation.id}
-                        Customer: ${reservation.customer_name}
-                        Date: ${date.toLocaleDateString()}
-                        Time: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        Table: ${reservation.table_number}
-                        Party Size: ${reservation.party_size}
-                        
-                        Your reservation has been stored in the Red-Black Tree.
-                        You can view it in the reservations list.
-                    `);
-                    
-                    // Redirect to reservations list
                     window.location.href = '/reservations/list';
-                }, 500);
+                }, 1000);
             } else {
-                showToast(data.error, 'danger');
+                showToast(data.error || 'Failed to create reservation', 'danger');
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="bi bi-calendar-plus"></i> Create Reservation';
             }
         })
         .catch(error => {
             console.error('Error creating reservation:', error);
-            showToast('Error creating reservation', 'danger');
+            showToast(error.message || 'Error creating reservation', 'danger');
             submitBtn.disabled = false;
             submitBtn.innerHTML = '<i class="bi bi-calendar-plus"></i> Create Reservation';
         });

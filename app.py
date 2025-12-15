@@ -4,6 +4,7 @@ Main Flask Application for BroderPro Café Management System
 from flask import Flask, render_template, jsonify
 from datetime import datetime
 import config
+from pathlib import Path
 
 # Import Blueprints
 from routes.reservation_routes import reservation_bp
@@ -14,6 +15,10 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(config.Config)
     
+    # Ensure data directory exists
+    Path('data').mkdir(exist_ok=True)
+    Path('templates').mkdir(exist_ok=True)
+
     # Register Blueprints
     app.register_blueprint(reservation_bp)
     
@@ -25,8 +30,31 @@ def create_app():
     @app.route('/')
     def index():
         """Main dashboard"""
-        stats = app.reservation_service.get_statistics()
-        return render_template('dashboard.html', stats=stats)
+        try:
+            stats = app.reservation_service.get_statistics()
+            return render_template('dashboard.html', stats=stats)
+        except Exception as e:
+            print(f"Error loading dashboard: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            # Return with empty stats on error
+            empty_stats = {
+                'total_reservations': 0,
+                'today_count': 0,
+                'rbt_size': 0,
+                'rbt_height': 0,
+                'table_count': 15,
+                'average_party_size': 0,
+                'available_tables_now': 0,
+                'rbt_operations': {
+                    'insert_count': 0,
+                    'search_count': 0,
+                    'range_search_count': 0,
+                    'delete_count': 0
+                }
+            }
+            return render_template('dashboard.html', stats=empty_stats)
     
     @app.route('/dashboard')
     def dashboard():

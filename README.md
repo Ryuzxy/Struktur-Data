@@ -20,7 +20,7 @@ Proyek ini dikembangkan menggunakan tumpukan teknologi berikut:
 | Kategori | Teknologi | Deskripsi |
 | :--- | :--- | :--- |
 | **Backend** | Python (80.0%) | Bahasa pemrograman utama untuk logika bisnis dan implementasi struktur data. |
-| **Web App** | (Kemungkinan Flask/Django) | Framework web Python yang digunakan untuk routing dan server. |
+| **Web App** | (Flask/Django) | Framework web Python yang digunakan untuk routing dan server. |
 | **Frontend** | HTML (10.7%), CSS (2.7%), JavaScript (6.6%) | Digunakan untuk tampilan antarmuka web. |
 
 ## Struktur Proyek
